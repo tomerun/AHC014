@@ -1,0 +1,8 @@
+*.dwarf
+*.zip
+main
+log.txt
+out.txt
+result/
+tools/
+out/
