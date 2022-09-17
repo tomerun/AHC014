@@ -133,13 +133,13 @@ struct Rect
   def as_coords
     dy = DR[@dir]
     dx = DC[@dir]
-    ps = [p0.x, p0.y, p0.x + dx * @size0, p0.y + dy * @size0]
-    dy, dx = dx * -1, dy
-    ps << ps[-2] + dx * @size1
-    ps << ps[-2] + dy * @size1
+    ps = [p0.x, p0.y, p0.x + dx * @size1, p0.y + dy * @size1]
     dy, dx = dx * -1, dy
     ps << ps[-2] + dx * @size0
     ps << ps[-2] + dy * @size0
+    dy, dx = dx * -1, dy
+    ps << ps[-2] + dx * @size1
+    ps << ps[-2] + dy * @size1
     return ps.join(" ")
   end
 
@@ -208,8 +208,8 @@ class Solver
 
   def solve(timelimit)
     @ps = Array.new(@m) { |i| Pos.new(@sys[i], @sxs[i]) }
-    @ps.sort_by! { |p| -w(p.y, p.x) + RND.next_int(@n * @n // 3) }
-    # shuffle(@ps)
+    @ps.sort_by! { |p| w(p.y, p.x) + RND.next_int(@n * @n // 4) }
+    shuffle(@ps)
     @has_point.fill(0)
     @has_edge.each { |row| row.fill(0) }
     score = 0
@@ -221,7 +221,7 @@ class Solver
     while true
       found_rect = nil
       @ps.size.times do |i|
-        found_rect = find_rect(@ps[i].y, @ps[i].x)
+        found_rect = find_rect(@ps[@ps.size - 1 - i].y, @ps[@ps.size - 1 - i].x)
         break if found_rect
       end
       break if !found_rect
@@ -237,28 +237,28 @@ class Solver
       dir1 = next_dir(dir0)
       s0 = dist_nearest(by, bx, dir0)
       next if s0 == -1
-      s1 = dist_nearest(by, bx, dir1)
-      next if s1 == -1
       cy0 = by + DR[dir0] * s0
       cx0 = bx + DC[dir0] * s0
-      cy1 = by + DR[dir1] * s1
-      cx1 = bx + DC[dir1] * s1
-      cy2 = cy0 + DR[dir1] * s1
-      cx2 = cx0 + DC[dir1] * s1
-      assert(cy2 == cy1 + DR[dir0] * s0)
-      assert(cx2 == cx1 + DC[dir0] * s0)
+      s1 = dist_nearest(cy0, cx0, dir1)
+      next if s1 == -1
+      cy1 = cy0 + DR[dir1] * s1
+      cx1 = cx0 + DC[dir1] * s1
+      cy2 = by + DR[dir1] * s1
+      cx2 = bx + DC[dir1] * s1
+      assert(cy1 == cy2 + DR[dir0] * s0)
+      assert(cx1 == cx2 + DC[dir0] * s0)
       next if !inside(cy2) || !inside(cx2)
       next if @has_point[cy2].bit(cx2) != 0
       # TODO: bit演算でまとめて
       next if s0.times.any? do |j|
-                @has_edge[cy1 + DR[dir0] * j][cx1 + DC[dir0] * j].bit(dir0) != 0 ||
-                (j != 0 && @has_point[cy1 + DR[dir0] * j].bit(cx1 + DC[dir0] * j) != 0)
+                @has_edge[cy2 + DR[dir0] * j][cx2 + DC[dir0] * j].bit(dir0) != 0 ||
+                (j != 0 && @has_point[cy2 + DR[dir0] * j].bit(cx2 + DC[dir0] * j) != 0)
               end
       next if s1.times.any? do |j|
-                @has_edge[cy0 + DR[dir1] * j][cx0 + DC[dir1] * j].bit(dir1) != 0 ||
-                (j != 0 && @has_point[cy0 + DR[dir1] * j].bit(cx0 + DC[dir1] * j) != 0)
+                @has_edge[by + DR[dir1] * j][bx + DC[dir1] * j].bit(dir1) != 0 ||
+                (j != 0 && @has_point[by + DR[dir1] * j].bit(bx + DC[dir1] * j) != 0)
               end
-      return Rect.new(Pos.new(cy2, cx2), s0, s1, dir0 ^ 2)
+      return Rect.new(Pos.new(cy2, cx2), s0, s1, dir1 ^ 2)
     end
     return nil
   end
@@ -280,11 +280,11 @@ class Solver
   def add(rect)
     y, x = rect.y, rect.x
     @ps << Pos.new(y, x)
-    pos = RND.next_int(@ps.size)
-    @ps[pos], @ps[-1] = @ps[-1], @ps[pos]
+    # pos = RND.next_int(@ps.size)
+    # @ps[pos], @ps[-1] = @ps[-1], @ps[pos]
     @has_point[y] |= 1 << x
     dir = rect.dir
-    s0, s1 = rect.size0, rect.size1
+    s0, s1 = rect.size1, rect.size0
     4.times do
       # TODO: bit演算でまとめて
       s0.times do
