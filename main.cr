@@ -4,8 +4,8 @@ INF        = 1 << 28
 COUNTER    = Counter.new
 STOPWATCH  = StopWatch.new
 RND        = XorShift.new(2u64)
-DR         = [-1, 1, 1, -1, -1, 0, 1, 0]
-DC         = [-1, -1, 1, 1, 0, -1, 0, 1]
+DR         = [-1, 0, 1, 0, -1, 1, 1, -1]
+DC         = [0, -1, 0, 1, -1, -1, 1, 1]
 
 class XorShift
   TO_DOUBLE = 0.5 / (1u64 << 63)
@@ -221,8 +221,14 @@ class Solver
     while true
       found_rect = nil
       @ps.size.times do |i|
-        found_rect = find_rect(@ps[@ps.size - 1 - i].y, @ps[@ps.size - 1 - i].x)
+        found_rect = find_rect(@ps[@ps.size - 1 - i].y, @ps[@ps.size - 1 - i].x, true)
         break if found_rect
+      end
+      if !found_rect
+        @ps.size.times do |i|
+          found_rect = find_rect(@ps[@ps.size - 1 - i].y, @ps[@ps.size - 1 - i].x, false)
+          break if found_rect
+        end
       end
       break if !found_rect
       rects << found_rect
@@ -232,7 +238,7 @@ class Solver
     return Result.new(rects, score)
   end
 
-  def find_rect(by, bx)
+  def find_rect(by, bx, par_inside)
     8.times do |dir0| # TODO: 逆方向も見ることにすれば半分でいい
       dir1 = next_dir(dir0)
       s0 = dist_nearest(by, bx, dir0)
@@ -249,6 +255,7 @@ class Solver
       assert(cx1 == cx2 + DC[dir0] * s0)
       next if !inside(cy2) || !inside(cx2)
       next if @has_point[cy2].bit(cx2) != 0
+      next if par_inside && dir0 >= 4 && (cy2 - @n // 2).abs < @n // 4 && (cx2 - @n // 2).abs < @n // 4
       # TODO: bit演算でまとめて
       next if s0.times.any? do |j|
                 @has_edge[cy2 + DR[dir0] * j][cx2 + DC[dir0] * j].bit(dir0) != 0 ||
