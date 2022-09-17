@@ -1,5 +1,5 @@
 START_TIME = Time.utc.to_unix_ms
-TL         = 900
+TL         = (ENV["TL"]? || 900).to_i
 INF        = 1 << 28
 COUNTER    = Counter.new
 STOPWATCH  = StopWatch.new
@@ -183,7 +183,7 @@ class Solver
     @m.times do |i|
       @sxs[i], @sys[i] = read_line.split.map(&.to_i)
     end
-    @has_point = Array(Int32).new(@n, 0)
+    @has_point = Array(UInt64).new(@n, 0u64)
     @has_edge = Array(Array(Int32)).new(@n) { Array.new(@n, 0) }
     @s = 0
     @n.times do |i|
@@ -209,12 +209,12 @@ class Solver
   def solve(timelimit)
     @ps = Array.new(@m) { |i| Pos.new(@sys[i], @sxs[i]) }
     @ps.sort_by! { |p| w(p.y, p.x) + RND.next_int(@n * @n // 4) }
-    shuffle(@ps)
-    @has_point.fill(0)
+    # shuffle(@ps)
+    @has_point.fill(0u64)
     @has_edge.each { |row| row.fill(0) }
     score = 0
     @m.times do |i|
-      @has_point[@sys[i]] |= 1 << @sxs[i]
+      @has_point[@sys[i]] |= 1u64 << @sxs[i]
       score += w(@sys[i], @sxs[i])
     end
     rects = [] of Rect
@@ -257,13 +257,11 @@ class Solver
       next if @has_point[cy2].bit(cx2) != 0
       next if par_inside && dir0 >= 4 && (cy2 - @n // 2).abs < @n // 4 && (cx2 - @n // 2).abs < @n // 4
       # TODO: bit演算でまとめて
-      next if s0.times.any? do |j|
-                @has_edge[cy2 + DR[dir0] * j][cx2 + DC[dir0] * j].bit(dir0) != 0 ||
-                (j != 0 && @has_point[cy2 + DR[dir0] * j].bit(cx2 + DC[dir0] * j) != 0)
+      next if @has_edge[cy2][cx2].bit(dir0) != 0 || (1...s0).any? do |j|
+                @has_point[cy2 + DR[dir0] * j].bit(cx2 + DC[dir0] * j) != 0
               end
-      next if s1.times.any? do |j|
-                @has_edge[by + DR[dir1] * j][bx + DC[dir1] * j].bit(dir1) != 0 ||
-                (j != 0 && @has_point[by + DR[dir1] * j].bit(bx + DC[dir1] * j) != 0)
+      next if @has_edge[by][bx].bit(dir1) != 0 || (1...s1).any? do |j|
+                @has_point[by + DR[dir1] * j].bit(bx + DC[dir1] * j) != 0
               end
       return Rect.new(Pos.new(cy2, cx2), s0, s1, dir1 ^ 2)
     end
@@ -271,9 +269,9 @@ class Solver
   end
 
   def dist_nearest(y, x, dir)
+    return -1 if @has_edge[y][x].bit(dir) != 0
     s = 1
     while true
-      return -1 if @has_edge[y][x].bit(dir) != 0
       y += DR[dir]
       x += DC[dir]
       return -1 if !inside(y) || !inside(x)
@@ -289,7 +287,7 @@ class Solver
     @ps << Pos.new(y, x)
     # pos = RND.next_int(@ps.size)
     # @ps[pos], @ps[-1] = @ps[-1], @ps[pos]
-    @has_point[y] |= 1 << x
+    @has_point[y] |= 1u64 << x
     dir = rect.dir
     s0, s1 = rect.size1, rect.size0
     4.times do
