@@ -226,6 +226,40 @@ class Solver
     return 0 <= coord && coord < @n
   end
 
+  def verify(rects)
+    exist_point = Array.new(@n) { Array.new(@n, false) }
+    exist_edge = Array.new(@n) { Array.new(@n) { Array.new(8, false) } }
+    @m.times do |i|
+      exist_point[@sys[i]][@sxs[i]] = true
+    end
+    rects.size.times do |i|
+      rect = rects[i]
+      assert(!exist_point[rect.p0.y][rect.p0.x], [rects, i])
+      exist_point[rect.p0.y][rect.p0.x] = true
+      s0, s1 = rect.size0, rect.size1
+      dir = rect.dir
+      y = rect.p0.y
+      x = rect.p0.x
+      4.times do
+        exist_edge[y][x][dir] = true
+        exist_edge[y + DR[dir]][x + DC[dir]][dir ^ 4] = true
+        (s0 - 1).times do
+          y += DR[dir]
+          x += DC[dir]
+          assert(!exist_point[y][x], [rects, i, y, x])
+          assert(!exist_edge[y][x][dir], [rects, i, y, x])
+          exist_edge[y][x][dir] = true
+          exist_edge[y + DR[dir]][x + DC[dir]][dir ^ 4] = true
+        end
+        y += DR[dir]
+        x += DC[dir]
+        assert(exist_point[y][x], [rects, i, y, x])
+        s0, s1 = s1, s0
+        dir = next_dir(dir)
+      end
+    end
+  end
+
   def solve(timelimit)
     orig_ps = Array.new(@m) { |i| Pos.new(@sys[i], @sxs[i]) }
     orig_ps.sort_by! { |p| w(p.y, p.x) + RND.next_int(@n * @n // 4) }
@@ -304,7 +338,7 @@ class Solver
       end
       rects.reverse!
       rects.size.times { |i| add(rects[i], i) }
-      debug("retain:#{rects.size} out of #{prev_result.rects.size}")
+      # debug("retain:#{rects.size} out of #{prev_result.rects.size}")
     end
     @n.times do |i|
       @initial_points[i][0, @n] = @has_point[i]
@@ -321,7 +355,7 @@ class Solver
       if found_rect[1] >= rects.size
         rects << found_rect[0]
       else
-        debug("insert #{found_rect[1]} / #{rects.size}")
+        # debug("insert #{found_rect[1]} / #{rects.size} #{found_rect[0]}")
         rects.insert(found_rect[1], found_rect[0])
         (found_rect[1] + 1).upto(rects.size - 1) do |i|
           r = rects[i]
@@ -330,6 +364,7 @@ class Solver
       end
       score += w(found_rect[0].p0)
     end
+    # verify(rects)
     return Result.new(rects, score)
   end
 
@@ -394,6 +429,9 @@ class Solver
       @has_edge[y][x].bit(dir1) == 0 ? @has_point[y][x] : -1
     end
     return nil if min_pi1 <= max_ridx
+    if @has_edge[cy2][cx2] != 0 && (min_pi0 != INF || min_pi1 != INF)
+      return nil
+    end
     return Rect.new(Pos.new(cy2, cx2), s1, s0, dir1 ^ 4), {min_pi0, min_pi1}.min
   end
 
@@ -426,6 +464,9 @@ class Solver
       @has_edge[y][x].bit(dir1) == 0 ? @has_point[y][x] : -1
     end
     return nil if min_pi1 <= max_ridx
+    if @has_edge[cy2][cx2] != 0 && (min_pi0 != INF || min_pi1 != INF)
+      return nil
+    end
     return Rect.new(Pos.new(cy2, cx2), s0, s1, dir0 ^ 4), {min_pi0, min_pi1}.min
   end
 
