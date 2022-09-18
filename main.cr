@@ -265,12 +265,23 @@ class Solver
     orig_ps.sort_by! { |p| w(p.y, p.x) + RND.next_int(@n * @n // 4) }
     @ps = orig_ps.dup
     best_res = solve_one(RES_EMPTY)
+    cur_res = best_res
     turn = 0
     tmp_orig_ps = orig_ps
+    initial_cooler = 0.001
+    final_cooler = 0.01
+    cooler = initial_cooler
+    begin_time = Time.utc.to_unix_ms
+    total_time = timelimit - begin_time
     while true
-      if Time.utc.to_unix_ms > timelimit
-        debug("turn:#{turn}")
-        break
+      if (turn & 0x1) == 0
+        cur_time = Time.utc.to_unix_ms
+        if cur_time > timelimit
+          debug("total_turn: #{turn}")
+          break
+        end
+        ratio = (cur_time - begin_time) / total_time
+        cooler = Math.exp(Math.log(initial_cooler) * (1.0 - ratio) + Math.log(final_cooler) * ratio)
       end
       ch0 = -1
       ch1 = -1
@@ -285,10 +296,13 @@ class Solver
         @ps.concat(orig_ps)
         @ps[ch0], @ps[ch1] = @ps[ch1], @ps[ch0]
       end
-      res = solve_one(best_res)
-      if res.score > best_res.score
-        debug("score:#{res.score} turn:#{turn}")
-        best_res = res
+      res = solve_one(cur_res)
+      if accept(res.score - cur_res.score, cooler)
+        if res.score > best_res.score
+          best_res = res
+          debug("score:#{res.score} turn:#{turn}")
+        end
+        cur_res = res
         if turn < 100
           orig_ps = tmp_orig_ps
         else
@@ -298,6 +312,13 @@ class Solver
       turn += 1
     end
     return best_res
+  end
+
+  def accept(diff, cooler)
+    return true if diff >= 0
+    v = diff * cooler
+    return false if v < -8
+    return RND.next_double < Math.exp(v)
   end
 
   def solve_one(prev_result)
