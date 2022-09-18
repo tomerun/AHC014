@@ -1,5 +1,6 @@
 START_TIME = Time.utc.to_unix_ms
 TL         = (ENV["TL"]? || 900).to_i
+PART       = (ENV["PART"]? || 4).to_i
 INF        = 1 << 28
 COUNTER    = Counter.new
 STOPWATCH  = StopWatch.new
@@ -133,13 +134,13 @@ struct Rect
   def as_coords
     dy = DR[@dir]
     dx = DC[@dir]
-    ps = [p0.x, p0.y, p0.x + dx * @size1, p0.y + dy * @size1]
-    dy, dx = dx * -1, dy
-    ps << ps[-2] + dx * @size0
-    ps << ps[-2] + dy * @size0
+    ps = [p0.x, p0.y, p0.x + dx * @size0, p0.y + dy * @size0]
     dy, dx = dx * -1, dy
     ps << ps[-2] + dx * @size1
     ps << ps[-2] + dy * @size1
+    dy, dx = dx * -1, dy
+    ps << ps[-2] + dx * @size0
+    ps << ps[-2] + dy * @size0
     return ps.join(" ")
   end
 
@@ -191,6 +192,7 @@ class Solver
         @s += w(i, j)
       end
     end
+    @initial_points = Array(UInt64).new
     debug("n:#{@n} m:#{@m} s:#{@s}")
   end
 
@@ -210,7 +212,7 @@ class Solver
     orig_ps = Array.new(@m) { |i| Pos.new(@sys[i], @sxs[i]) }
     orig_ps.sort_by! { |p| w(p.y, p.x) + RND.next_int(@n * @n // 4) }
     @ps = orig_ps.dup
-    best_res = solve_one()
+    best_res = solve_one(RES_EMPTY)
     turn = 0
     tmp_orig_ps = orig_ps
     while true
@@ -231,7 +233,7 @@ class Solver
         @ps.concat(orig_ps)
         @ps[ch0], @ps[ch1] = @ps[ch1], @ps[ch0]
       end
-      res = solve_one()
+      res = solve_one(best_res)
       if res.score > best_res.score
         debug("score:#{res.score} turn:#{turn}")
         best_res = res
@@ -246,7 +248,7 @@ class Solver
     return best_res
   end
 
-  def solve_one
+  def solve_one(prev_result)
     @has_point.fill(0u64)
     @has_edge.each { |row| row.fill(0) }
     score = 0
@@ -255,6 +257,40 @@ class Solver
       score += w(@sys[i], @sxs[i])
     end
     rects = [] of Rect
+    if !prev_result.rects.empty?
+      # 前回の結果からいくつかの四角とその依存元を保持する
+      prev_rects = prev_result.rects.sort_by { |r| w(r.p0) + RND.next_int(@n * @n // 4) }.last(40)
+      retain_point = Array.new(@n, 0u64)
+      c = 0
+      prev_rects.size.times do |i|
+        if (RND.next_int & 1) != 0
+          rect = prev_rects[i]
+          retain_point[rect.p0.y] |= 1u64 << rect.p0.x
+          c += 1
+          # break if c >= 20
+        end
+      end
+      prev_result.rects.reverse_each do |rect|
+        if retain_point[rect.p0.y].bit(rect.p0.x) != 0
+          rects << rect
+          score += w(rect.p0)
+          y, x = rect.p0.y, rect.p0.x
+          dir = rect.dir
+          s0, s1 = rect.size0, rect.size1
+          3.times do
+            y += DR[dir] * s0
+            x += DC[dir] * s0
+            retain_point[y] |= 1u64 << x
+            s0, s1 = s1, s0
+            dir = next_dir(dir)
+          end
+        end
+      end
+      rects.reverse!
+      rects.each { |r| add(r) }
+      debug("retain:#{rects.size} out of #{prev_result.rects.size}")
+    end
+    @initial_points = @has_point.dup
     while true
       found_rect = nil
       # (@ps.size - 1).downto(0) do |i|
@@ -277,22 +313,32 @@ class Solver
   end
 
   def find_rect(by, bx, par_inside)
-    8.times do |dir0|
-      s0 = dist_nearest(by, bx, dir0)
-      next if s0 == -1
-      # clockwise
-      rect = find_rect_cw(by, bx, s0, dir0, par_inside)
-      return rect if rect
+    if @initial_points[by].bit(bx) == 0
+      8.times do |dir0|
+        s0 = dist_nearest(by, bx, dir0)
+        next if s0 == -1
+        # clockwise
+        rect = find_rect_cw(by, bx, s0, dir0, par_inside)
+        return rect if rect
 
-      # counter-clockwise
-      cy0 = by + DR[dir0] * s0
-      cx0 = bx + DC[dir0] * s0
-      rect = find_rect_cw(cy0, cx0, s0, dir0 ^ 4, par_inside)
-      return rect if rect
+        # counter-clockwise
+        cy0 = by + DR[dir0] * s0
+        cx0 = bx + DC[dir0] * s0
+        rect = find_rect_cw(cy0, cx0, s0, dir0 ^ 4, par_inside)
+        return rect if rect
 
-      # both sides
-      rect = find_rect_both(by, bx, s0, dir0, par_inside)
-      return rect if rect
+        # both sides
+        rect = find_rect_both(by, bx, s0, dir0, par_inside)
+        return rect if rect
+      end
+    else
+      8.times do |dir0|
+        s0 = dist_nearest(by, bx, dir0)
+        next if s0 == -1
+        # clockwise
+        rect = find_rect_cw(by, bx, s0, dir0, par_inside)
+        return rect if rect
+      end
     end
     return nil
   end
@@ -319,7 +365,7 @@ class Solver
     return nil if @has_edge[by][bx].bit(dir1) != 0 || (1...s1).any? do |j|
                     @has_point[by + DR[dir1] * j].bit(bx + DC[dir1] * j) != 0
                   end
-    return Rect.new(Pos.new(cy2, cx2), s0, s1, dir1 ^ 4)
+    return Rect.new(Pos.new(cy2, cx2), s1, s0, dir1 ^ 4)
   end
 
   def find_rect_both(by, bx, s0, dir0, par_inside)
@@ -344,7 +390,7 @@ class Solver
     return nil if @has_edge[cy0][cx0].bit(dir1) != 0 || (1...s1).any? do |j|
                     @has_point[cy0 + DR[dir1] * j].bit(cx0 + DC[dir1] * j) != 0
                   end
-    return Rect.new(Pos.new(cy2, cx2), s1, s0, dir0 ^ 4)
+    return Rect.new(Pos.new(cy2, cx2), s0, s1, dir0 ^ 4)
   end
 
   def dist_nearest(y, x, dir)
@@ -366,7 +412,7 @@ class Solver
     @ps << Pos.new(y, x)
     @has_point[y] |= 1u64 << x
     dir = rect.dir
-    s0, s1 = rect.size1, rect.size0
+    s0, s1 = rect.size0, rect.size1
     4.times do
       # TODO: bit演算でまとめて
       s0.times do
@@ -383,14 +429,13 @@ end
 
 def main
   solver = Solver.new
-  best_res = solver.solve(START_TIME + TL)
-  # part = 1
-  # part.times do |i|
-  #   res = solver.solve(START_TIME + TL * (i + 1) // part)
-  #   if res.score > best_res.score
-  #     best_res = res
-  #   end
-  # end
+  best_res = RES_EMPTY
+  PART.times do |i|
+    res = solver.solve(START_TIME + TL * (i + 1) // PART)
+    if res.score > best_res.score
+      best_res = res
+    end
+  end
   puts best_res
   debug((best_res.score / solver.s * solver.n * solver.n / solver.m * 1_000_000).round.to_i)
 end
