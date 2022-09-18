@@ -1,6 +1,6 @@
 START_TIME = Time.utc.to_unix_ms
 TL         = (ENV["TL"]? || 900).to_i
-PART       = (ENV["PART"]? || 4).to_i
+PART       = (ENV["PART"]? || 10).to_i
 INF        = 1 << 28
 COUNTER    = Counter.new
 STOPWATCH  = StopWatch.new
@@ -126,6 +126,7 @@ struct Pos
 end
 
 struct Rect
+  include Enumerable(Pos)
   getter :p0, :size0, :size1, :dir
 
   def initialize(@p0 : Pos, @size0 : Int32, @size1 : Int32, @dir : Int32)
@@ -150,6 +151,22 @@ struct Rect
 
   def x
     @p0.x
+  end
+
+  def each
+    dy = DR[@dir]
+    dx = DC[@dir]
+    y = p0.y + dy * @size0
+    x = p0.x + dx * @size0
+    yield Pos.new(y, x)
+    dy, dx = dx * -1, dy
+    y += dy * @size1
+    x += dx * @size1
+    yield Pos.new(y, x)
+    dy, dx = dx * -1, dy
+    y += dy * @size0
+    x += dx * @size0
+    yield Pos.new(y, x)
   end
 end
 
@@ -258,6 +275,24 @@ class Solver
     end
     rects = [] of Rect
     if !prev_result.rects.empty?
+      # # 前回の結果から1つの四角とその依存先を削除する
+      # remove_point = Array.new(@n, 0u64)
+      # rmi = RND.next_int(prev_result.rects.size)
+      # rects.concat(prev_result.rects.first(rmi))
+      # remove_point[prev_result.rects[rmi].p0.y] |= 1u64 << prev_result.rects[rmi].p0.x
+      # (rmi + 1).upto(prev_result.rects.size - 1) do |i|
+      #   rect = prev_result.rects[i]
+      #   if rect.all? { |p| remove_point[p.y].bit(p.x) == 0 }
+      #     rects << rect
+      #   else
+      #     remove_point[rect.p0.y] |= 1u64 << rect.p0.x
+      #   end
+      # end
+      # rects.each do |r|
+      #   score += w(r.p0)
+      #   add(r)
+      # end
+
       # 前回の結果からいくつかの四角とその依存元を保持する
       prev_rects = prev_result.rects.sort_by { |r| w(r.p0) + RND.next_int(@n * @n // 4) }.last(40)
       retain_point = Array.new(@n, 0u64)
@@ -333,6 +368,7 @@ class Solver
       end
     else
       8.times do |dir0|
+        next if @has_edge[by][bx].bit(next_dir(dir0)) != 0
         s0 = dist_nearest(by, bx, dir0)
         next if s0 == -1
         # clockwise
@@ -358,11 +394,13 @@ class Solver
     return nil if !inside(cy2) || !inside(cx2)
     return nil if @has_point[cy2].bit(cx2) != 0
     return nil if par_inside && (dir0 & 1) != 0 && (cy2 - @n // 2).abs < @n // 4 && (cx2 - @n // 2).abs < @n // 4
+    return nil if @has_edge[cy2][cx2].bit(dir0) != 0
+    return nil if @has_edge[by][bx].bit(dir1) != 0
     # TODO: bit演算でまとめて
-    return nil if @has_edge[cy2][cx2].bit(dir0) != 0 || (1...s0).any? do |j|
+    return nil if (1...s0).any? do |j|
                     @has_point[cy2 + DR[dir0] * j].bit(cx2 + DC[dir0] * j) != 0
                   end
-    return nil if @has_edge[by][bx].bit(dir1) != 0 || (1...s1).any? do |j|
+    return nil if (1...s1).any? do |j|
                     @has_point[by + DR[dir1] * j].bit(bx + DC[dir1] * j) != 0
                   end
     return Rect.new(Pos.new(cy2, cx2), s1, s0, dir1 ^ 4)
@@ -383,11 +421,13 @@ class Solver
     return nil if !inside(cy2) || !inside(cx2)
     return nil if @has_point[cy2].bit(cx2) != 0
     return nil if par_inside && dir0 >= 4 && (cy2 - @n // 2).abs < @n // 4 && (cx2 - @n // 2).abs < @n // 4
+    return nil if @has_edge[cy1][cx1].bit(dir0) != 0
+    return nil if @has_edge[cy0][cx0].bit(dir1) != 0
     # TODO: bit演算でまとめて
-    return nil if @has_edge[cy1][cx1].bit(dir0) != 0 || (1...s0).any? do |j|
+    return nil if (1...s0).any? do |j|
                     @has_point[cy1 + DR[dir0] * j].bit(cx1 + DC[dir0] * j) != 0
                   end
-    return nil if @has_edge[cy0][cx0].bit(dir1) != 0 || (1...s1).any? do |j|
+    return nil if (1...s1).any? do |j|
                     @has_point[cy0 + DR[dir1] * j].bit(cx0 + DC[dir1] * j) != 0
                   end
     return Rect.new(Pos.new(cy2, cx2), s0, s1, dir0 ^ 4)
