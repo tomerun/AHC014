@@ -4,8 +4,8 @@ INF        = 1 << 28
 COUNTER    = Counter.new
 STOPWATCH  = StopWatch.new
 RND        = XorShift.new(2u64)
-DR         = [-1, 0, 1, 0, -1, 1, 1, -1]
-DC         = [0, -1, 0, 1, -1, -1, 1, 1]
+DR         = [-1, -1, 0, 1, 1, 1, 0, -1]
+DC         = [0, -1, -1, -1, 0, 1, 1, 1]
 
 class XorShift
   TO_DOUBLE = 0.5 / (1u64 << 63)
@@ -167,7 +167,7 @@ end
 RES_EMPTY = Result.new([] of Rect, 0)
 
 def next_dir(d)
-  return ((d + 1) & 3) | (d & 4)
+  return (d + 2) & 7
 end
 
 class Solver
@@ -287,7 +287,7 @@ class Solver
       # counter-clockwise
       cy0 = by + DR[dir0] * s0
       cx0 = bx + DC[dir0] * s0
-      rect = find_rect_cw(cy0, cx0, s0, dir0 ^ 2, par_inside)
+      rect = find_rect_cw(cy0, cx0, s0, dir0 ^ 4, par_inside)
       return rect if rect
 
       # both sides
@@ -311,7 +311,7 @@ class Solver
     assert(cx1 == cx2 + DC[dir0] * s0)
     return nil if !inside(cy2) || !inside(cx2)
     return nil if @has_point[cy2].bit(cx2) != 0
-    return nil if par_inside && dir0 >= 4 && (cy2 - @n // 2).abs < @n // 4 && (cx2 - @n // 2).abs < @n // 4
+    return nil if par_inside && (dir0 & 1) != 0 && (cy2 - @n // 2).abs < @n // 4 && (cx2 - @n // 2).abs < @n // 4
     # TODO: bit演算でまとめて
     return nil if @has_edge[cy2][cx2].bit(dir0) != 0 || (1...s0).any? do |j|
                     @has_point[cy2 + DR[dir0] * j].bit(cx2 + DC[dir0] * j) != 0
@@ -319,7 +319,7 @@ class Solver
     return nil if @has_edge[by][bx].bit(dir1) != 0 || (1...s1).any? do |j|
                     @has_point[by + DR[dir1] * j].bit(bx + DC[dir1] * j) != 0
                   end
-    return Rect.new(Pos.new(cy2, cx2), s0, s1, dir1 ^ 2)
+    return Rect.new(Pos.new(cy2, cx2), s0, s1, dir1 ^ 4)
   end
 
   def find_rect_both(by, bx, s0, dir0, par_inside)
@@ -344,7 +344,7 @@ class Solver
     return nil if @has_edge[cy0][cx0].bit(dir1) != 0 || (1...s1).any? do |j|
                     @has_point[cy0 + DR[dir1] * j].bit(cx0 + DC[dir1] * j) != 0
                   end
-    return Rect.new(Pos.new(cy2, cx2), s1, s0, dir0 ^ 2)
+    return Rect.new(Pos.new(cy2, cx2), s1, s0, dir0 ^ 4)
   end
 
   def dist_nearest(y, x, dir)
@@ -373,7 +373,7 @@ class Solver
         @has_edge[y][x] |= 1 << dir
         y += DR[dir]
         x += DC[dir]
-        @has_edge[y][x] |= 1 << (dir ^ 2)
+        @has_edge[y][x] |= 1 << (dir ^ 4)
       end
       dir = next_dir(dir)
       s0, s1 = s1, s0
