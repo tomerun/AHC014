@@ -415,9 +415,10 @@ class Solver
   end
 
   def find_rect_cw(by, bx, s0, dir0)
+    dir1 = next_dir(dir0)
+    return nil if @has_edge[by][bx].bit(dir1) != 0
     cy0 = by + DR[dir0] * s0
     cx0 = bx + DC[dir0] * s0
-    dir1 = next_dir(dir0)
     s1 = dist_nearest(cy0, cx0, dir1)
     return nil if s1 == -1
     cy1 = cy0 + DR[dir1] * s1
@@ -429,7 +430,6 @@ class Solver
     return nil if !inside(cy2) || !inside(cx2)
     return nil if @has_point[cy2][cx2] != EMPTY
     return nil if @has_edge[cy2][cx2].bit(dir0) != 0
-    return nil if @has_edge[by][bx].bit(dir1) != 0
     max_ridx = {@has_point[by][bx], @has_point[cy0][cx0], @has_point[cy1][cx1]}.max
     min_pi0 = s0 == 1 ? INF : (1...s0).min_of do |i|
       y = cy2 + DR[dir0] * i
@@ -450,9 +450,10 @@ class Solver
   end
 
   def find_rect_both(by, bx, s0, dir0)
+    dir1 = next_dir(dir0)
     cy0 = by + DR[dir0] * s0
     cx0 = bx + DC[dir0] * s0
-    dir1 = next_dir(dir0)
+    return nil if @has_edge[cy0][cx0].bit(dir1) != 0
     s1 = dist_nearest(by, bx, dir1)
     return nil if s1 == -1
     cy1 = by + DR[dir1] * s1
@@ -464,7 +465,6 @@ class Solver
     return nil if !inside(cy2) || !inside(cx2)
     return nil if @has_point[cy2][cx2] != EMPTY
     return nil if @has_edge[cy1][cx1].bit(dir0) != 0
-    return nil if @has_edge[cy0][cx0].bit(dir1) != 0
     max_ridx = {@has_point[by][bx], @has_point[cy0][cx0], @has_point[cy1][cx1]}.max
     min_pi0 = s0 == 1 ? INF : (1...s0).min_of do |i|
       y = cy1 + DR[dir0] * i
