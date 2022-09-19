@@ -311,6 +311,7 @@ class Solver
       end
       turn += 1
     end
+    verify(best_res.rects)
     return best_res
   end
 
@@ -345,15 +346,8 @@ class Solver
         if retain_point[rect.p0.y].bit(rect.p0.x) != 0
           rects << rect
           score += w(rect.p0)
-          y, x = rect.p0.y, rect.p0.x
-          dir = rect.dir
-          s0, s1 = rect.size0, rect.size1
-          3.times do
-            y += DR[dir] * s0
-            x += DC[dir] * s0
-            retain_point[y] |= 1u64 << x
-            s0, s1 = s1, s0
-            dir = next_dir(dir)
+          rect.each do |p|
+            retain_point[p.y] |= 1u64 << p.x
           end
         end
       end
@@ -385,7 +379,6 @@ class Solver
       end
       score += w(found_rect[0].p0)
     end
-    # verify(rects)
     return Result.new(rects, score)
   end
 
