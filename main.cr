@@ -262,7 +262,7 @@ class Solver
 
   def solve(timelimit)
     orig_ps = Array.new(@m) { |i| Pos.new(@sys[i], @sxs[i]) }
-    orig_ps.sort_by! { |p| w(p.y, p.x) + RND.next_int(@n * @n // 4) }
+    orig_ps.sort_by! { |p| -w(p.y, p.x) }
     @ps = orig_ps.dup
     best_res = solve_one(RES_EMPTY)
     cur_res = best_res
@@ -285,8 +285,8 @@ class Solver
       end
       ch0 = -1
       ch1 = -1
-      if turn < 100
-        tmp_orig_ps = orig_ps.sort_by { |p| w(p.y, p.x) + RND.next_int(@n * @n // 4) }
+      if turn < 100000
+        tmp_orig_ps = orig_ps.sort_by { |p| -w(p.y, p.x) + RND.next_int(@n * @n // 10) }
         @ps = tmp_orig_ps.dup
       else
         ch0 = RND.next_int(orig_ps.size)
@@ -303,11 +303,11 @@ class Solver
           debug("score:#{res.score} turn:#{turn}")
         end
         cur_res = res
-        if turn < 100
-          orig_ps = tmp_orig_ps
-        else
-          orig_ps[ch0], orig_ps[ch1] = orig_ps[ch1], orig_ps[ch0]
-        end
+        # if turn < 100
+        #   orig_ps = tmp_orig_ps
+        # else
+        #   orig_ps[ch0], orig_ps[ch1] = orig_ps[ch1], orig_ps[ch0]
+        # end
       end
       turn += 1
     end
