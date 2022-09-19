@@ -1,6 +1,6 @@
 START_TIME = Time.utc.to_unix_ms
 TL         = (ENV["TL"]? || 900).to_i
-PART       = (ENV["PART"]? || 10).to_i
+PART       = (ENV["PART"]? || 1).to_i
 INF        = 1 << 28
 EMPTY      = INF - 1
 COUNTER    = Counter.new
