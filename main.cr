@@ -211,6 +211,7 @@ class Solver
       end
     end
     @initial_points = Array(Array(Int32)).new(@n) { Array.new(@n, EMPTY) }
+    @prior_tilt = Array(Array(Int32)).new(@n) { Array.new(@n, 0) }
     debug("n:#{@n} m:#{@m} s:#{@s}")
   end
 
@@ -330,6 +331,25 @@ class Solver
       @has_point[@sys[i]][@sxs[i]] = -1
       score += w(@sys[i], @sxs[i])
     end
+    tilt_config = Array.new(4) { RND.next_int & 1 }
+    @n.times do |i|
+      @n.times do |j|
+        if i < j
+          if @n - 1 - i < j
+            @prior_tilt[i][j] = (i + tilt_config[0]) % 2
+          else
+            @prior_tilt[i][j] = (j + tilt_config[1]) % 2
+          end
+        else
+          if @n - 1 - i < j
+            @prior_tilt[i][j] = (j + tilt_config[2]) % 2
+          else
+            @prior_tilt[i][j] = (i + tilt_config[3]) % 2
+          end
+        end
+      end
+    end
+
     rects = [] of Rect
     if !prev_result.rects.empty?
       # 前回の結果からいくつかの四角とその依存元を保持する
@@ -384,7 +404,8 @@ class Solver
 
   def find_rect(by, bx)
     if @initial_points[by][bx] != EMPTY
-      8.times do |dir0|
+      8.times do |d|
+        dir0 = ((d << 1) & 7 | (d >> 2)) ^ @prior_tilt[by][bx]
         s0 = dist_nearest(by, bx, dir0)
         next if s0 == -1
         # clockwise
@@ -402,7 +423,8 @@ class Solver
         return rect if rect
       end
     else
-      8.times do |dir0|
+      8.times do |d|
+        dir0 = ((d << 1) & 7 | (d >> 2)) ^ @prior_tilt[by][bx]
         next if @has_edge[by][bx].bit(next_dir(dir0)) != 0
         s0 = dist_nearest(by, bx, dir0)
         next if s0 == -1
