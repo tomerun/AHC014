@@ -277,7 +277,7 @@ class Solver
     while true
       if (turn & 0x1) == 0
         cur_time = Time.utc.to_unix_ms
-        if cur_time > timelimit
+        if cur_time >= timelimit
           debug("total_turn: #{turn}")
           break
         end
@@ -287,7 +287,7 @@ class Solver
       ch0 = -1
       ch1 = -1
       if turn < 100000
-        tmp_orig_ps = orig_ps.sort_by { |p| -w(p.y, p.x) + RND.next_int(@n * @n // 10) }
+        tmp_orig_ps = orig_ps.sort_by { |p| -w(p.y, p.x) + RND.next_int(@n * @n // 10).to_i }
         @ps = tmp_orig_ps.dup
       else
         ch0 = RND.next_int(orig_ps.size)
@@ -550,7 +550,7 @@ def main
     end
   end
   puts best_res
-  debug((best_res.score / solver.s * solver.n * solver.n / solver.m * 1_000_000).round.to_i)
+  debug([(best_res.score / solver.s * solver.n * solver.n / solver.m * 1_000_000).round.to_i, best_res.rects.size / solver.n / solver.n])
 end
 
 main
