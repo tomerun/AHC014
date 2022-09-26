@@ -49,6 +49,18 @@ class Visualizer {
 	constructor() {
 		this.input = null
 		this.frames = []
+		this.colorPalete = []
+		this.recolor()
+	}
+
+	recolor() {
+		this.colorPalete = []
+		for (let i = 0; i < 500; i++) {
+			const col_r = Math.round(Math.random() * 150 + 50)
+			const col_g = Math.round(Math.random() * 150 + 50)
+			const col_b = Math.round(Math.random() * 150 + 50)
+			this.colorPalete.push(`rgb(${col_r}, ${col_g}, ${col_b})`)
+		}
 	}
 
 	update() {
@@ -80,10 +92,15 @@ class Visualizer {
 		frame.value = 0
 		step.max = this.frames[0].rects.length
 		step.value = step.max
-		this.show(0, step.max)
+		this.show()
 	}
 
-	show(frame_i, step_i) {
+	show() {
+		if (this.frames.length == 0) {
+			return
+		}
+		const frame_i = frame.value
+		const step_i = step.value
 		const ctx = canvas.getContext('2d')
 		const n = this.input.n
 		const margin = 10
@@ -111,11 +128,8 @@ class Visualizer {
 		let score = this.input.base_score
 		const f = this.frames[frame_i]
 		ctx.lineWidth = 2
-		f.rects.slice(0, step_i).forEach((rect) => {
-			const col_r = Math.round(Math.random() * 150 + 50)
-			const col_g = Math.round(Math.random() * 150 + 50)
-			const col_b = Math.round(Math.random() * 150 + 50)
-			ctx.strokeStyle = `rgb(${col_r}, ${col_g}, ${col_b})`
+		f.rects.slice(0, step_i).forEach((rect, i) => {
+			ctx.strokeStyle = this.colorPalete[i]
 			ctx.beginPath()
 			const dps = rect.map((p, i) => {
 				const prev = rect[(i + 3) % 4]
@@ -162,8 +176,6 @@ class Visualizer {
 			ctx.fillStyle = 'black'
 			const idxStr = i.toString()
 			ctx.fillText(idxStr, p0.x * cell_size, (n - 1 - p0.y) * cell_size)
-			// const metrics = ctx.measureText(idxStr)
-			// ctx.fillText(idxStr, p0.x * cell_size - metrics.width / 2, (n - 1 - p0.y) * cell_size)
 		})
 
 		ctx.fillStyle = 'black'
@@ -184,16 +196,20 @@ const visualizer = new Visualizer()
 
 output.oninput = (event) => visualizer.update()
 update.onclick = (event) => visualizer.update()
-recolor.onclick = (event) => visualizer.show(frame.value, step.value)
+
+recolor.onclick = (event) => {
+	visualizer.recolor()
+	visualizer.show()
+}
 
 frame.onchange = (event) => {
 	const frame_i = event.target.value
 	step.max = visualizer.frames[frame_i].rects.length
 	step.value = step.max
-	visualizer.show(frame_i, step.value)
+	visualizer.show()
 }
 
 step.onchange = (event) => {
-	visualizer.show(frame.value, event.target.value)
+	visualizer.show()
 }
 
