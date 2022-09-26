@@ -30,13 +30,15 @@
 			<p>output:</p>
 			<p><textarea id="output" rows="3"></textarea></p>
 			<p><button id="update">update</button> <button id="recolor">recolor</button></p>
+			<p><label><input id="show_order" type=checkbox checked> show order</label></p>
 			<p>frame: <input id="frame" type="number" min="0" max="0"></input></p>
 			<p>step: <input id="step" type="number" min="0" max="0"></input></p>
+			<p>zoom: <input id="zoom" type="number" min="1.0" max="3.0" step="0.1" value=1.0></input></p>
 			<p>score: <span id="score"></span></p>
 			<p>raw_score: <span id="raw_score"></span></p>
 		</div>
 		<div>
-			<canvas id="canvas" width="1200" height="1200"></canvas>
+			<canvas id="canvas" width="1000" height="1000"></canvas>
 		</div>
 	</div>
 </body>

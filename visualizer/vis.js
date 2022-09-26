@@ -3,8 +3,10 @@ const input = document.getElementById("input")
 const output = document.getElementById("output")
 const update = document.getElementById("update")
 const recolor = document.getElementById("recolor")
+const show_order = document.getElementById("show_order")
 const frame = document.getElementById("frame")
 const step = document.getElementById("step")
+const zoom = document.getElementById("zoom")
 const canvas = document.getElementById("canvas")
 const real_score = document.getElementById("score")
 const raw_score = document.getElementById("raw_score")
@@ -101,16 +103,21 @@ class Visualizer {
 		}
 		const frame_i = frame.value
 		const step_i = step.value
+		const zoom_r = zoom.value
 		const ctx = canvas.getContext('2d')
 		const n = this.input.n
 		const margin = 10
 		const cell_size = (canvas.width - margin * 2) / (n - 1)
 		console.log(`cell_size:${cell_size}`)
 		ctx.clearRect(0, 0, canvas.width, canvas.height)
-		ctx.font = "14px monospace"
+		ctx.font = `${12 / zoom_r}px monospace`
 		ctx.textAlign = "center"
 		ctx.textBaseline = "middle"
-		ctx.lineWidth = 1.0
+		ctx.lineWidth = 1.0 / zoom_r
+		if (zoom_r != 1.0) {
+			ctx.translate(0.5 * canvas.width * (1.0 - zoom_r), 0.5 * canvas.height * (1.0 - zoom_r))
+			ctx.scale(zoom_r, zoom_r)
+		}
 		ctx.translate(margin, margin)
 
 		ctx.beginPath()
@@ -127,7 +134,8 @@ class Visualizer {
 
 		let score = this.input.base_score
 		const f = this.frames[frame_i]
-		ctx.lineWidth = 2
+		ctx.lineWidth = 2 / zoom_r
+		const shift = 3 / zoom_r
 		f.rects.slice(0, step_i).forEach((rect, i) => {
 			ctx.strokeStyle = this.colorPalete[i]
 			ctx.beginPath()
@@ -138,8 +146,8 @@ class Visualizer {
 				const max_y = Math.max(prev.y, next.y)
 				const min_x = Math.min(prev.x, next.x)
 				const max_x = Math.max(prev.x, next.x)
-				const my = max_y <= p.y ? 3 : min_y >= p.y ? -3 : 0
-				const mx = max_x <= p.x ? -3 : min_x >= p.x ? 3 : 0
+				const my = max_y <= p.y ? shift : min_y >= p.y ? -shift : 0
+				const mx = max_x <= p.x ? -shift : min_x >= p.x ? shift : 0
 				return new Point((n - 1 - p.y) * cell_size + my, p.x * cell_size + mx)
 			})
 			ctx.moveTo(dps[3].x, dps[3].y)
@@ -150,20 +158,23 @@ class Visualizer {
 			score += w(rect[0].y, rect[0].x, this.input.n)
 		})
 
-		ctx.lineWidth = 1
+		const do_show_order = show_order.checked
+		const radius = (do_show_order ? 8 : 5) / zoom_r
+		const guide_len = 6 / zoom_r
+		ctx.lineWidth = 1 / zoom_r
 		ctx.strokeStyle = 'black'
 		f.rects.slice(0, step_i).forEach((rect, i) => {
 			ctx.fillStyle = 'white'
 			const p0 = rect[0]
 			ctx.beginPath()
-			ctx.arc(p0.x * cell_size, (n - 1 - p0.y) * cell_size, 10, 0, 2 * Math.PI)
+			ctx.arc(p0.x * cell_size, (n - 1 - p0.y) * cell_size, radius, 0, 2 * Math.PI)
 			ctx.fill()
 			ctx.stroke()
 
-			const dy0 = -Math.sign(rect[1].y - p0.y) * 8
-			const dx0 = Math.sign(rect[1].x - p0.x) * 8
-			const dy1 = -Math.sign(rect[3].y - p0.y) * 8
-			const dx1 = Math.sign(rect[3].x - p0.x) * 8
+			const dy0 = -Math.sign(rect[1].y - p0.y) * guide_len
+			const dx0 = Math.sign(rect[1].x - p0.x) * guide_len
+			const dy1 = -Math.sign(rect[3].y - p0.y) * guide_len
+			const dx1 = Math.sign(rect[3].x - p0.x) * guide_len
 			const by = (n - 1 - p0.y) * cell_size + (dy0 == dy1 ? dy0 : dy0 + dy1)
 			const bx = p0.x * cell_size + (dx0 == dx1 ? dx0 : dx0 + dx1)
 			ctx.beginPath()
@@ -173,15 +184,17 @@ class Visualizer {
 			ctx.lineTo(bx + dx1, by + dy1)
 			ctx.stroke()
 
-			ctx.fillStyle = 'black'
-			const idxStr = i.toString()
-			ctx.fillText(idxStr, p0.x * cell_size, (n - 1 - p0.y) * cell_size)
+			if (do_show_order) {
+				ctx.fillStyle = 'black'
+				const idxStr = i.toString()
+				ctx.fillText(idxStr, p0.x * cell_size, (n - 1 - p0.y) * cell_size)
+			}
 		})
 
 		ctx.fillStyle = 'black'
 		for (const p of this.input.ps) {
 			ctx.beginPath()
-			ctx.arc(p.x * cell_size, (n - 1 - p.y) * cell_size, 10, 0, 2 * Math.PI)
+			ctx.arc(p.x * cell_size, (n - 1 - p.y) * cell_size, 5 / zoom_r, 0, 2 * Math.PI)
 			ctx.fill()
 		}
 
@@ -196,6 +209,7 @@ const visualizer = new Visualizer()
 
 output.oninput = (event) => visualizer.update()
 update.onclick = (event) => visualizer.update()
+show_order.onclick = (event) => visualizer.show()
 
 recolor.onclick = (event) => {
 	visualizer.recolor()
@@ -209,7 +223,6 @@ frame.onchange = (event) => {
 	visualizer.show()
 }
 
-step.onchange = (event) => {
-	visualizer.show()
-}
+step.onchange = (event) => visualizer.show()
+zoom.onchange = (event) => visualizer.show()
 
