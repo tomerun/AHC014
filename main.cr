@@ -267,7 +267,7 @@ class Solver
     best_res = solve_one(RES_EMPTY)
     cur_res = best_res
     turn = 0
-    initial_cooler = 0.001
+    initial_cooler = 0.0003
     final_cooler = 0.01
     cooler = initial_cooler
     begin_time = Time.utc.to_unix_ms
