@@ -313,20 +313,24 @@ class Solver
     @m.times do |i|
       @has_point[@sys[i]][@sxs[i]] = -1
     end
-    tilt_config = Array.new(4) { RND.next_int & 1 }
+    tilt_config = Array.new(4) { RND.next_int & 3 }
     @n.times do |i|
       @n.times do |j|
         if i < j
           if @n - 1 - i < j
-            @prior_tilt[i][j] = (i + tilt_config[0]) % 2
+            @prior_tilt[i][j] = 0x22 << ((i + (tilt_config[0] & 1)) % 2 * 2)
+            @prior_tilt[i][j] |= 0x11 << ((i + j + (tilt_config[0] >> 1)) % 2 * 2)
           else
-            @prior_tilt[i][j] = (j + tilt_config[1]) % 2
+            @prior_tilt[i][j] = 0x22 << ((j + (tilt_config[1] & 1)) % 2 * 2)
+            @prior_tilt[i][j] |= 0x11 << ((i + j + (tilt_config[1] >> 1)) % 2 * 2)
           end
         else
           if @n - 1 - i < j
-            @prior_tilt[i][j] = (j + tilt_config[2]) % 2
+            @prior_tilt[i][j] = 0x22 << ((j + (tilt_config[2] & 1)) % 2 * 2)
+            @prior_tilt[i][j] |= 0x11 << ((i + j + (tilt_config[2] >> 1)) % 2 * 2)
           else
-            @prior_tilt[i][j] = (i + tilt_config[3]) % 2
+            @prior_tilt[i][j] = 0x22 << ((i + (tilt_config[3] & 1)) % 2 * 2)
+            @prior_tilt[i][j] |= 0x11 << ((i + j + (tilt_config[3] >> 1)) % 2 * 2)
           end
         end
       end
@@ -390,43 +394,54 @@ class Solver
 
   def find_rect(by, bx, initial)
     best_rect = nil
+    best_val = INF
     if !initial
-      8.times do |d|
-        dir0 = ((d << 1) & 7 | (d >> 2)) ^ @prior_tilt[by][bx]
+      8.times do |dir0|
         s0 = dist_nearest(by, bx, dir0)
         next if s0 == -1
         # clockwise
         rect = find_rect_cw(by, bx, s0, dir0)
-        return rect if rect && rect[0].size0 == 1 && rect[0].size1 == 1
-        if rect && (!best_rect || rect[0].size0 + rect[0].size1 < best_rect[0].size0 + best_rect[0].size1)
-          best_rect = rect
+        if rect
+          val = rect[0].size0 + rect[0].size1 + ((@prior_tilt[rect[0].y][rect[0].x] >> rect[0].dir) & 1)
+          if val < best_val
+            best_rect = rect
+            best_val = val
+          end
         end
 
         # counter-clockwise
         rect = find_rect_ccw(by, bx, s0, dir0)
-        return rect if rect && rect[0].size0 == 1 && rect[0].size1 == 1
-        if rect && (!best_rect || rect[0].size0 + rect[0].size1 < best_rect[0].size0 + best_rect[0].size1)
-          best_rect = rect
+        if rect
+          val = rect[0].size0 + rect[0].size1 + ((@prior_tilt[rect[0].y][rect[0].x] >> rect[0].dir) & 1)
+          if val < best_val
+            best_rect = rect
+            best_val = val
+          end
         end
 
         # both sides
         rect = find_rect_both(by, bx, s0, dir0)
-        return rect if rect && rect[0].size0 == 1 && rect[0].size1 == 1
-        if rect && (!best_rect || rect[0].size0 + rect[0].size1 < best_rect[0].size0 + best_rect[0].size1)
-          best_rect = rect
+        if rect
+          val = rect[0].size0 + rect[0].size1 + ((@prior_tilt[rect[0].y][rect[0].x] >> rect[0].dir) & 1)
+          if val < best_val
+            best_rect = rect
+            best_val = val
+          end
         end
       end
     else
-      8.times do |d|
-        dir0 = ((d << 1) & 7 | (d >> 2)) ^ @prior_tilt[by][bx]
+      8.times do |dir0|
         next if @has_edge[by][bx].bit(next_dir(dir0)) != 0
         s0 = dist_nearest(by, bx, dir0)
         next if s0 == -1
         # clockwise
         rect = find_rect_cw(by, bx, s0, dir0)
-        return rect if rect && rect[0].size0 == 1 && rect[0].size1 == 1
-        if rect && (!best_rect || rect[0].size0 + rect[0].size1 < best_rect[0].size0 + best_rect[0].size1)
-          best_rect = rect
+        if rect
+          val = rect[0].size0 + rect[0].size1 + ((@prior_tilt[rect[0].y][rect[0].x] >> rect[0].dir) & 1)
+          if val < best_val
+            best_rect = rect
+            best_val = val
+          end
         end
       end
     end
