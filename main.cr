@@ -199,8 +199,10 @@ class Solver
     @sxs = Array(Int32).new(@m, 0)
     @sys = Array(Int32).new(@m, 0)
     @ps = [] of Pos
+    @base_score = 0
     @m.times do |i|
       @sxs[i], @sys[i] = read_line.split.map(&.to_i)
+      @base_score += w(@sys[i], @sxs[i])
     end
     @has_point = Array(Array(Int32)).new(@n) { Array.new(@n, EMPTY) }
     @has_edge = Array(Array(Int32)).new(@n) { Array.new(@n, 0) }
@@ -210,7 +212,6 @@ class Solver
         @s += w(i, j)
       end
     end
-    @initial_points = Array(Array(Int32)).new(@n) { Array.new(@n, EMPTY) }
     @prior_tilt = Array(Array(Int32)).new(@n) { Array.new(@n, 0) }
     debug("n:#{@n} m:#{@m} s:#{@s}")
   end
@@ -282,8 +283,6 @@ class Solver
         ratio = (cur_time - begin_time) / total_time
         cooler = Math.exp(Math.log(initial_cooler) * (1.0 - ratio) + Math.log(final_cooler) * ratio)
       end
-      ch0 = -1
-      ch1 = -1
       @ps = orig_ps.dup
       res = solve_one(cur_res)
       if accept(res.score - cur_res.score, cooler)
@@ -307,12 +306,12 @@ class Solver
   end
 
   def solve_one(prev_result)
+    STOPWATCH.start("init")
     @has_point.each { |row| row.fill(EMPTY) }
     @has_edge.each { |row| row.fill(0) }
-    score = 0
+    score = @base_score
     @m.times do |i|
       @has_point[@sys[i]][@sxs[i]] = -1
-      score += w(@sys[i], @sxs[i])
     end
     tilt_config = Array.new(4) { RND.next_int & 1 }
     @n.times do |i|
@@ -332,16 +331,17 @@ class Solver
         end
       end
     end
+    STOPWATCH.stop("init")
 
     rects = [] of Rect
     if !prev_result.rects.empty?
       # 前回の結果からいくつかの四角とその依存元を保持する
-      prev_rects = prev_result.rects.sort_by { |r| w(r.p0) + RND.next_int(@n * @n // 4) }.last(200)
+      STOPWATCH.start("retain")
       retain_point = Array.new(@n, 0u64)
       prob_retain = RND.next_int(12) + 1
-      prev_rects.size.times do |i|
+      prev_result.rects.size.times do |i|
         if (RND.next_int & 15) <= prob_retain
-          rect = prev_rects[i]
+          rect = prev_result.rects[i]
           retain_point[rect.p0.y] |= 1u64 << rect.p0.x
         end
       end
@@ -356,13 +356,12 @@ class Solver
       end
       rects.reverse!
       rects.size.times { |i| add(rects[i], i) }
+      STOPWATCH.stop("retain")
       # debug("retain:#{rects.size} out of #{prev_result.rects.size}")
     end
     shuffle(@ps)
-    # @n.times do |i|
-    #   @initial_points[i][0, @n] = @has_point[i]
-    # end
     si = 0
+    STOPWATCH.start("find")
     while true
       found_rect = nil
       si.upto(@ps.size - 1) do |i|
@@ -384,6 +383,7 @@ class Solver
       end
       score += w(found_rect[0].p0)
     end
+    STOPWATCH.stop("find")
     return Result.new(rects, score)
   end
 
@@ -545,6 +545,7 @@ def main
     end
   end
   puts best_res
+  debug(STOPWATCH)
   debug(best_res.rects.size / solver.n / solver.n)
   debug((best_res.score / solver.s * solver.n * solver.n / solver.m * 1_000_000).round.to_i)
 end
