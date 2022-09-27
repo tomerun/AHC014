@@ -287,8 +287,8 @@ class Solver
       res = solve_one(cur_res)
       if accept(res.score - cur_res.score, cooler)
         if res.score > best_res.score
-          best_res = res
           debug("score:#{res.score} turn:#{turn}")
+          best_res = res
         end
         cur_res = res
       end
@@ -314,8 +314,8 @@ class Solver
       @has_point[@sys[i]][@sxs[i]] = -1
     end
     tilt_config = Array.new(4) { RND.next_int & 3 }
-    @n.times do |i|
-      @n.times do |j|
+    (@n // 4).upto(@n * 3 // 4) do |i|
+      (@n // 4).upto(@n * 3 // 4) do |j|
         if i < j
           if @n - 1 - i < j
             @prior_tilt[i][j] = 0x22 << ((i + (tilt_config[0] & 1)) % 2 * 2)
@@ -341,25 +341,43 @@ class Solver
     if !prev_result.rects.empty?
       # 前回の結果からいくつかの四角とその依存元を保持する
       STOPWATCH.start("retain")
-      retain_point = Array.new(@n, 0u64)
-      prob_retain = RND.next_int(12) + 1
-      prev_result.rects.size.times do |i|
-        if (RND.next_int & 15) <= prob_retain
-          rect = prev_result.rects[i]
-          retain_point[rect.p0.y] |= 1u64 << rect.p0.x
-        end
-      end
-      prev_result.rects.reverse_each do |rect|
-        if retain_point[rect.p0.y].bit(rect.p0.x) != 0
+      if (RND.next_int & 3) == 0
+        rm_pos = prev_result.rects[RND.next_int(prev_result.rects.size)].p0
+        rm_b = rm_pos.y - RND.next_int(5)
+        rm_t = rm_pos.y + RND.next_int(5)
+        rm_l = rm_pos.x - RND.next_int(5)
+        rm_r = rm_pos.x + RND.next_int(5)
+        prev_result.rects.each do |rect|
+          if rm_b <= rect.y && rect.y <= rm_t && rm_l <= rect.x && rect.x <= rm_r
+            next
+          end
+          if rect.any? { |p| @has_point[p.y][p.x] == EMPTY }
+            next
+          end
+          add(rect, rects.size)
           rects << rect
           score += w(rect.p0)
-          rect.each do |p|
-            retain_point[p.y] |= 1u64 << p.x
+        end
+      else
+        prob_retain = RND.next_int(12) + 1
+        prev_result.rects.size.times do |i|
+          if (RND.next_int & 15) <= prob_retain
+            rect = prev_result.rects[i]
+            @has_point[rect.y][rect.x] = -1
           end
         end
+        prev_result.rects.reverse_each do |rect|
+          if @has_point[rect.y][rect.x] != EMPTY
+            rects << rect
+            score += w(rect.p0)
+            rect.each do |p|
+              @has_point[p.y][p.x] = -1
+            end
+          end
+        end
+        rects.reverse!
+        rects.size.times { |i| add(rects[i], i) }
       end
-      rects.reverse!
-      rects.size.times { |i| add(rects[i], i) }
       STOPWATCH.stop("retain")
       # debug("retain:#{rects.size} out of #{prev_result.rects.size}")
     end
