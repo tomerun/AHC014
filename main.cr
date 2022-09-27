@@ -263,12 +263,10 @@ class Solver
 
   def solve(timelimit)
     orig_ps = Array.new(@m) { |i| Pos.new(@sys[i], @sxs[i]) }
-    orig_ps.sort_by! { |p| -w(p.y, p.x) }
     @ps = orig_ps.dup
     best_res = solve_one(RES_EMPTY)
     cur_res = best_res
     turn = 0
-    tmp_orig_ps = orig_ps
     initial_cooler = 0.001
     final_cooler = 0.01
     cooler = initial_cooler
@@ -286,17 +284,7 @@ class Solver
       end
       ch0 = -1
       ch1 = -1
-      if turn < 100000
-        tmp_orig_ps = orig_ps.sort_by { |p| -w(p.y, p.x) + RND.next_int(@n * @n // 10).to_i }
-        @ps = tmp_orig_ps.dup
-      else
-        ch0 = RND.next_int(orig_ps.size)
-        ch1 = RND.next_int(orig_ps.size - 1)
-        ch1 += 1 if ch0 <= ch1
-        @ps.clear
-        @ps.concat(orig_ps)
-        @ps[ch0], @ps[ch1] = @ps[ch1], @ps[ch0]
-      end
+      @ps = orig_ps.dup
       res = solve_one(cur_res)
       if accept(res.score - cur_res.score, cooler)
         if res.score > best_res.score
@@ -304,11 +292,6 @@ class Solver
           debug("score:#{res.score} turn:#{turn}")
         end
         cur_res = res
-        # if turn < 100
-        #   orig_ps = tmp_orig_ps
-        # else
-        #   orig_ps[ch0], orig_ps[ch1] = orig_ps[ch1], orig_ps[ch0]
-        # end
       end
       turn += 1
     end
@@ -353,7 +336,7 @@ class Solver
     rects = [] of Rect
     if !prev_result.rects.empty?
       # 前回の結果からいくつかの四角とその依存元を保持する
-      prev_rects = prev_result.rects.sort_by { |r| w(r.p0) + RND.next_int(@n * @n // 4) }.last(40)
+      prev_rects = prev_result.rects.sort_by { |r| w(r.p0) + RND.next_int(@n * @n // 4) }.last(200)
       retain_point = Array.new(@n, 0u64)
       prob_retain = RND.next_int(12) + 1
       prev_rects.size.times do |i|
@@ -375,15 +358,17 @@ class Solver
       rects.size.times { |i| add(rects[i], i) }
       # debug("retain:#{rects.size} out of #{prev_result.rects.size}")
     end
-    @n.times do |i|
-      @initial_points[i][0, @n] = @has_point[i]
-    end
+    shuffle(@ps)
+    # @n.times do |i|
+    #   @initial_points[i][0, @n] = @has_point[i]
+    # end
+    si = 0
     while true
       found_rect = nil
-      (@ps.size - 1).downto(0) do |i|
+      si.upto(@ps.size - 1) do |i|
         found_rect = find_rect(@ps[i].y, @ps[i].x)
         break if found_rect
-        @ps.pop
+        si += 1
       end
       break if !found_rect
       add(found_rect[0], {found_rect[1], rects.size}.min)
@@ -403,37 +388,47 @@ class Solver
   end
 
   def find_rect(by, bx)
-    if @initial_points[by][bx] != EMPTY
-      8.times do |d|
-        dir0 = ((d << 1) & 7 | (d >> 2)) ^ @prior_tilt[by][bx]
-        s0 = dist_nearest(by, bx, dir0)
-        next if s0 == -1
-        # clockwise
-        rect = find_rect_cw(by, bx, s0, dir0)
-        return rect if rect
-
-        # counter-clockwise
-        cy0 = by + DR[dir0] * s0
-        cx0 = bx + DC[dir0] * s0
-        rect = find_rect_cw(cy0, cx0, s0, dir0 ^ 4)
-        return rect if rect
-
-        # both sides
-        rect = find_rect_both(by, bx, s0, dir0)
-        return rect if rect
+    # if @initial_points[by][bx] == EMPTY
+    best_rect = nil
+    8.times do |d|
+      dir0 = ((d << 1) & 7 | (d >> 2)) ^ @prior_tilt[by][bx]
+      s0 = dist_nearest(by, bx, dir0)
+      next if s0 == -1
+      # clockwise
+      rect = find_rect_cw(by, bx, s0, dir0)
+      return rect if rect && rect[0].size0 == 1 && rect[0].size1 == 1
+      if rect && (!best_rect || rect[0].size0 + rect[0].size1 < best_rect[0].size0 + best_rect[0].size1)
+        best_rect = rect
       end
-    else
-      8.times do |d|
-        dir0 = ((d << 1) & 7 | (d >> 2)) ^ @prior_tilt[by][bx]
-        next if @has_edge[by][bx].bit(next_dir(dir0)) != 0
-        s0 = dist_nearest(by, bx, dir0)
-        next if s0 == -1
-        # clockwise
-        rect = find_rect_cw(by, bx, s0, dir0)
-        return rect if rect
+
+      # counter-clockwise
+      cy0 = by + DR[dir0] * s0
+      cx0 = bx + DC[dir0] * s0
+      rect = find_rect_cw(cy0, cx0, s0, dir0 ^ 4)
+      return rect if rect && rect[0].size0 == 1 && rect[0].size1 == 1
+      if rect && (!best_rect || rect[0].size0 + rect[0].size1 < best_rect[0].size0 + best_rect[0].size1)
+        best_rect = rect
+      end
+
+      # both sides
+      rect = find_rect_both(by, bx, s0, dir0)
+      return rect if rect && rect[0].size0 == 1 && rect[0].size1 == 1
+      if rect && (!best_rect || rect[0].size0 + rect[0].size1 < best_rect[0].size0 + best_rect[0].size1)
+        best_rect = rect
       end
     end
-    return nil
+    # else
+    #   8.times do |d|
+    #     dir0 = ((d << 1) & 7 | (d >> 2)) ^ @prior_tilt[by][bx]
+    #     next if @has_edge[by][bx].bit(next_dir(dir0)) != 0
+    #     s0 = dist_nearest(by, bx, dir0)
+    #     next if s0 == -1
+    #     # clockwise
+    #     rect = find_rect_cw(by, bx, s0, dir0)
+    #     return rect if rect
+    #   end
+    # end
+    return best_rect
   end
 
   def find_rect_cw(by, bx, s0, dir0)
@@ -550,7 +545,8 @@ def main
     end
   end
   puts best_res
-  debug([(best_res.score / solver.s * solver.n * solver.n / solver.m * 1_000_000).round.to_i, best_res.rects.size / solver.n / solver.n])
+  debug(best_res.rects.size / solver.n / solver.n)
+  debug((best_res.score / solver.s * solver.n * solver.n / solver.m * 1_000_000).round.to_i)
 end
 
 main
