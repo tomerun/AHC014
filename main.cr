@@ -393,18 +393,9 @@ class Solver
         si += 1
       end
       break if !found_rect
-      add(found_rect[0], {found_rect[1], rects.size}.min)
-      if found_rect[1] >= rects.size
-        rects << found_rect[0]
-      else
-        # debug("insert #{found_rect[1]} / #{rects.size} #{found_rect[0]}")
-        rects.insert(found_rect[1], found_rect[0])
-        (found_rect[1] + 1).upto(rects.size - 1) do |i|
-          r = rects[i]
-          @has_point[r.p0.y][r.p0.x] = i
-        end
-      end
-      score += w(found_rect[0].p0)
+      add(found_rect, rects.size)
+      rects << found_rect
+      score += w(found_rect.p0)
     end
     STOPWATCH.stop("find")
     return Result.new(rects, score)
@@ -414,13 +405,16 @@ class Solver
     best_rect = nil
     best_val = INF
     if !initial
-      8.times do |dir0|
+      dirs = @has_edge[by][bx] ^ 0xFF
+      while dirs != 0
+        dir0 = dirs.trailing_zeros_count
+        dirs &= dirs - 1
         s0 = dist_nearest(by, bx, dir0)
         next if s0 == -1
         # clockwise
         rect = find_rect_cw(by, bx, s0, dir0)
         if rect
-          val = rect[0].size0 + rect[0].size1 + ((@prior_tilt[rect[0].y][rect[0].x] >> rect[0].dir) & 1)
+          val = rect.size0 + rect.size1 + ((@prior_tilt[rect.y][rect.x] >> rect.dir) & 1)
           if val < best_val
             best_rect = rect
             best_val = val
@@ -430,7 +424,7 @@ class Solver
         # counter-clockwise
         rect = find_rect_ccw(by, bx, s0, dir0)
         if rect
-          val = rect[0].size0 + rect[0].size1 + ((@prior_tilt[rect[0].y][rect[0].x] >> rect[0].dir) & 1)
+          val = rect.size0 + rect.size1 + ((@prior_tilt[rect.y][rect.x] >> rect.dir) & 1)
           if val < best_val
             best_rect = rect
             best_val = val
@@ -440,7 +434,7 @@ class Solver
         # both sides
         rect = find_rect_both(by, bx, s0, dir0)
         if rect
-          val = rect[0].size0 + rect[0].size1 + ((@prior_tilt[rect[0].y][rect[0].x] >> rect[0].dir) & 1)
+          val = rect.size0 + rect.size1 + ((@prior_tilt[rect.y][rect.x] >> rect.dir) & 1)
           if val < best_val
             best_rect = rect
             best_val = val
@@ -448,14 +442,17 @@ class Solver
         end
       end
     else
-      8.times do |dir0|
+      dirs = @has_edge[by][bx] ^ 0xFF
+      while dirs != 0
+        dir0 = dirs.trailing_zeros_count
+        dirs &= dirs - 1
         next if @has_edge[by][bx].bit(next_dir(dir0)) != 0
         s0 = dist_nearest(by, bx, dir0)
         next if s0 == -1
         # clockwise
         rect = find_rect_cw(by, bx, s0, dir0)
         if rect
-          val = rect[0].size0 + rect[0].size1 + ((@prior_tilt[rect[0].y][rect[0].x] >> rect[0].dir) & 1)
+          val = rect.size0 + rect.size1 + ((@prior_tilt[rect.y][rect.x] >> rect.dir) & 1)
           if val < best_val
             best_rect = rect
             best_val = val
@@ -471,6 +468,7 @@ class Solver
     return nil if @has_edge[by][bx].bit(dir1) != 0
     cy0 = by + DR[dir0] * s0
     cx0 = bx + DC[dir0] * s0
+    return nil if @has_edge[cy0][cx0].bit(dir1) != 0
     s1 = dist_nearest(cy0, cx0, dir1)
     return nil if s1 == -1
     cy1 = cy0 + DR[dir1] * s1
@@ -482,23 +480,21 @@ class Solver
     return nil if !inside(cy2) || !inside(cx2)
     return nil if @has_point[cy2][cx2] != EMPTY
     return nil if @has_edge[cy2][cx2].bit(dir0) != 0
-    max_ridx = {@has_point[by][bx], @has_point[cy0][cx0], @has_point[cy1][cx1]}.max
-    min_pi0 = s0 == 1 ? INF : (1...s0).min_of do |i|
-      y = cy2 + DR[dir0] * i
-      x = cx2 + DC[dir0] * i
-      @has_edge[y][x].bit(dir0) == 0 ? @has_point[y][x] : -1
-    end
-    return nil if min_pi0 <= max_ridx
-    min_pi1 = s1 == 1 ? INF : (1...s1).min_of do |i|
-      y = by + DR[dir1] * i
-      x = bx + DC[dir1] * i
-      @has_edge[y][x].bit(dir1) == 0 ? @has_point[y][x] : -1
-    end
-    return nil if min_pi1 <= max_ridx
-    if @has_edge[cy2][cx2] != 0 && (min_pi0 != INF || min_pi1 != INF)
+    if (1...s0).any? do |i|
+         y = cy2 + DR[dir0] * i
+         x = cx2 + DC[dir0] * i
+         @has_point[y][x] != EMPTY
+       end
       return nil
     end
-    return Rect.new(Pos.new(cy2, cx2), s1, s0, dir1 ^ 4), {min_pi0, min_pi1}.min
+    if (1...s1).any? do |i|
+         y = by + DR[dir1] * i
+         x = bx + DC[dir1] * i
+         @has_point[y][x] != EMPTY
+       end
+      return nil
+    end
+    return Rect.new(Pos.new(cy2, cx2), s1, s0, dir1 ^ 4)
   end
 
   def find_rect_ccw(by, bx, s0, dir0)
@@ -506,6 +502,7 @@ class Solver
     return nil if @has_edge[by][bx].bit(dir1) != 0
     cy0 = by + DR[dir0] * s0
     cx0 = bx + DC[dir0] * s0
+    return nil if @has_edge[cy0][cx0].bit(dir1) != 0
     s1 = dist_nearest(cy0, cx0, dir1)
     return nil if s1 == -1
     cy1 = cy0 + DR[dir1] * s1
@@ -517,23 +514,21 @@ class Solver
     return nil if !inside(cy2) || !inside(cx2)
     return nil if @has_point[cy2][cx2] != EMPTY
     return nil if @has_edge[cy2][cx2].bit(dir0) != 0
-    max_ridx = {@has_point[by][bx], @has_point[cy0][cx0], @has_point[cy1][cx1]}.max
-    min_pi0 = s0 == 1 ? INF : (1...s0).min_of do |i|
-      y = cy2 + DR[dir0] * i
-      x = cx2 + DC[dir0] * i
-      @has_edge[y][x].bit(dir0) == 0 ? @has_point[y][x] : -1
-    end
-    return nil if min_pi0 <= max_ridx
-    min_pi1 = s1 == 1 ? INF : (1...s1).min_of do |i|
-      y = by + DR[dir1] * i
-      x = bx + DC[dir1] * i
-      @has_edge[y][x].bit(dir1) == 0 ? @has_point[y][x] : -1
-    end
-    return nil if min_pi1 <= max_ridx
-    if @has_edge[cy2][cx2] != 0 && (min_pi0 != INF || min_pi1 != INF)
+    if (1...s0).any? do |i|
+         y = cy2 + DR[dir0] * i
+         x = cx2 + DC[dir0] * i
+         @has_point[y][x] != EMPTY
+       end
       return nil
     end
-    return Rect.new(Pos.new(cy2, cx2), s0, s1, dir0), {min_pi0, min_pi1}.min
+    if (1...s1).any? do |i|
+         y = by + DR[dir1] * i
+         x = bx + DC[dir1] * i
+         @has_point[y][x] != EMPTY
+       end
+      return nil
+    end
+    return Rect.new(Pos.new(cy2, cx2), s0, s1, dir0)
   end
 
   def find_rect_both(by, bx, s0, dir0)
@@ -541,6 +536,7 @@ class Solver
     cy0 = by + DR[dir0] * s0
     cx0 = bx + DC[dir0] * s0
     return nil if @has_edge[cy0][cx0].bit(dir1) != 0
+    return nil if @has_edge[by][bx].bit(dir1) != 0
     s1 = dist_nearest(by, bx, dir1)
     return nil if s1 == -1
     cy1 = by + DR[dir1] * s1
@@ -552,27 +548,24 @@ class Solver
     return nil if !inside(cy2) || !inside(cx2)
     return nil if @has_point[cy2][cx2] != EMPTY
     return nil if @has_edge[cy1][cx1].bit(dir0) != 0
-    max_ridx = {@has_point[by][bx], @has_point[cy0][cx0], @has_point[cy1][cx1]}.max
-    min_pi0 = s0 == 1 ? INF : (1...s0).min_of do |i|
-      y = cy1 + DR[dir0] * i
-      x = cx1 + DC[dir0] * i
-      @has_edge[y][x].bit(dir0) == 0 ? @has_point[y][x] : -1
-    end
-    return nil if min_pi0 <= max_ridx
-    min_pi1 = s1 == 1 ? INF : (1...s1).min_of do |i|
-      y = cy0 + DR[dir1] * i
-      x = cx0 + DC[dir1] * i
-      @has_edge[y][x].bit(dir1) == 0 ? @has_point[y][x] : -1
-    end
-    return nil if min_pi1 <= max_ridx
-    if @has_edge[cy2][cx2] != 0 && (min_pi0 != INF || min_pi1 != INF)
+    if (1...s0).any? do |i|
+         y = cy1 + DR[dir0] * i
+         x = cx1 + DC[dir0] * i
+         @has_point[y][x] != EMPTY
+       end
       return nil
     end
-    return Rect.new(Pos.new(cy2, cx2), s0, s1, dir0 ^ 4), {min_pi0, min_pi1}.min
+    if (1...s1).any? do |i|
+         y = cy0 + DR[dir1] * i
+         x = cx0 + DC[dir1] * i
+         @has_point[y][x] != EMPTY
+       end
+      return nil
+    end
+    return Rect.new(Pos.new(cy2, cx2), s0, s1, dir0 ^ 4)
   end
 
   def dist_nearest(y, x, dir)
-    return -1 if @has_edge[y][x].bit(dir) != 0
     s = 1
     while true
       y += DR[dir]
