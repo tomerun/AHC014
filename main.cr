@@ -343,10 +343,10 @@ class Solver
       STOPWATCH.start("retain")
       if (RND.next_int & 0x1F) == 0
         rm_pos = prev_result.rects[RND.next_int(prev_result.rects.size)].p0
-        rm_b = rm_pos.y - RND.next_int(5)
-        rm_t = rm_pos.y + RND.next_int(5)
-        rm_l = rm_pos.x - RND.next_int(5)
-        rm_r = rm_pos.x + RND.next_int(5)
+        rm_b = rm_pos.y - RND.next_int(5).to_i
+        rm_t = rm_pos.y + RND.next_int(5).to_i
+        rm_l = rm_pos.x - RND.next_int(5).to_i
+        rm_r = rm_pos.x + RND.next_int(5).to_i
         prev_result.rects.each do |rect|
           if rm_b <= rect.y && rect.y <= rm_t && rm_l <= rect.x && rect.x <= rm_r
             next
