@@ -446,7 +446,6 @@ class Solver
       while dirs != 0
         dir0 = dirs.trailing_zeros_count
         dirs &= dirs - 1
-        next if @has_edge[by][bx].bit(next_dir(dir0)) != 0
         s0 = dist_nearest(by, bx, dir0)
         next if s0 == -1
         # clockwise
