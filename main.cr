@@ -341,7 +341,7 @@ class Solver
     if !prev_result.rects.empty?
       # 前回の結果からいくつかの四角とその依存元を保持する
       STOPWATCH.start("retain")
-      if (RND.next_int & 3) == 0
+      if (RND.next_int & 0x1F) == 0
         rm_pos = prev_result.rects[RND.next_int(prev_result.rects.size)].p0
         rm_b = rm_pos.y - RND.next_int(5)
         rm_t = rm_pos.y + RND.next_int(5)
@@ -359,7 +359,7 @@ class Solver
           score += w(rect.p0)
         end
       else
-        prob_retain = RND.next_int(12) + 1
+        prob_retain = RND.next_int(3) + 1
         prev_result.rects.size.times do |i|
           if (RND.next_int & 15) <= prob_retain
             rect = prev_result.rects[i]
