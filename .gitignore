@@ -1,8 +1,10 @@
 *.dwarf
+*.o
 *.zip
 main
 log.txt
 out.txt
+vis.html
 result/
 tools/
 out/
