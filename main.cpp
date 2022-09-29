@@ -3,7 +3,6 @@
 #include <vector>
 #include <iostream>
 #include <array>
-#include <unordered_set>
 #include <numeric>
 #include <memory>
 #include <cstring>
@@ -377,15 +376,16 @@ struct Solver {
     }
     int score = base_score;
     STOP_TIMER(0);
-    vector<Rect> rects;
+    static vector<Rect> rects;
+    rects.clear();
     if (!prev_result.rects.empty()) {
       START_TIMER(1);
       if ((rnd.nextUInt() & 0x1F) == 0) {
         Pos rm_pos = prev_result.rects[rnd.nextUInt(prev_result.rects.size())].p0;
-        int rm_b = rm_pos.y - rnd.nextUInt(5);
-        int rm_t = rm_pos.y + rnd.nextUInt(5);
-        int rm_l = rm_pos.x - rnd.nextUInt(5);
-        int rm_r = rm_pos.x + rnd.nextUInt(5);
+        const int rm_b = rm_pos.y - rnd.nextUInt(5);
+        const int rm_t = rm_pos.y + rnd.nextUInt(5);
+        const int rm_l = rm_pos.x - rnd.nextUInt(5);
+        const int rm_r = rm_pos.x + rnd.nextUInt(5);
         for (const Rect& rect : prev_result.rects) {
           if (rm_b <= rect.y() && rect.y() <= rm_t && rm_l <= rect.x() && rect.x() <= rm_r) {
             continue;
@@ -404,10 +404,10 @@ struct Solver {
           score += w(rect.y(), rect.x());
         }
       } else {
-        int prob_keep = rnd.nextUInt(3) + 1;
+        const int prob_keep = rnd.nextUInt(3) + 1;
         for (auto itr = prev_result.rects.rbegin(); itr != prev_result.rects.rend(); ++itr) {
           const Rect& rect = *itr;
-          if ((has_point[rect.y()] & (1ull << rect.x())) || (rnd.nextUInt() & 15) <= prob_keep) {
+          if ((has_point[rect.y()] & (1ull << rect.x())) || (rnd.nextUInt() & 0xF) <= prob_keep) {
             add(rect);
             rects.push_back(rect);
             score += w(rect.y(), rect.x());
@@ -484,7 +484,6 @@ struct Solver {
       pi += 1;
     }
     STOP_TIMER(2);
-    // verify(rects);
     return Result(rects, score);
   }
 
@@ -591,8 +590,7 @@ struct Solver {
   void add(const Rect& rect) {
     int y = rect.y();
     int x = rect.x();
-    Pos pos = {y, x};
-    ps.push_back(pos);
+    ps.push_back(rect.p0);
     has_point_bit[0][x] |= 1ull << y;
     has_point_bit[2][y] |= 1ull << x;
     has_point_bit[1][N - 1 - (y - x)] |= 1ull << y;
