@@ -195,6 +195,7 @@ class Solver
   getter :n, :m, :s
   @n : Int32
   @m : Int32
+  @has_point : Array(UInt64)
 
   def initialize
     @n, @m = read_line.split.map(&.to_i)
@@ -206,6 +207,9 @@ class Solver
     @bbox_t = 0
     @bbox_l = @n
     @bbox_r = 0
+    @initial_has_point = [Array.new(@n, 0u64), Array.new(@n * 2 - 1, 0u64), Array.new(@n, 0u64), Array.new(@n * 2 - 1, 0u64)] of Array(UInt64)
+    @has_point_bit = [Array.new(@n, 0u64), Array.new(@n * 2 - 1, 0u64), Array.new(@n, 0u64), Array.new(@n * 2 - 1, 0u64)] of Array(UInt64)
+    @has_point = @has_point_bit[2]
     @m.times do |i|
       @sxs[i], @sys[i] = read_line.split.map(&.to_i)
       @base_score += w(@sys[i], @sxs[i])
@@ -213,8 +217,11 @@ class Solver
       @bbox_t = {@bbox_t, @sys[i]}.max
       @bbox_l = {@bbox_l, @sxs[i]}.min
       @bbox_r = {@bbox_r, @sxs[i]}.max
+      @initial_has_point[0][@sxs[i]] |= 1u64 << @sys[i]
+      @initial_has_point[2][@sys[i]] |= 1u64 << @sxs[i]
+      @initial_has_point[1][@n - 1 - (@sys[i] - @sxs[i])] |= 1u64 << @sys[i]
+      @initial_has_point[3][@sys[i] + @sxs[i]] |= 1u64 << @sys[i]
     end
-    @has_point = Array(Array(Int32)).new(@n) { Array.new(@n, EMPTY) }
     @has_edge = Array(Array(Int32)).new(@n) { Array.new(@n, 0) }
     @s = 0
     @n.times do |i|
@@ -315,12 +322,11 @@ class Solver
 
   def solve_one(prev_result)
     STOPWATCH.start("init")
-    @has_point.each { |row| row.fill(EMPTY) }
+    4.times do |i|
+      @has_point_bit[i][0, @has_point_bit[i].size] = @initial_has_point[i]
+    end
     @has_edge.each { |row| row.fill(0) }
     score = @base_score
-    @m.times do |i|
-      @has_point[@sys[i]][@sxs[i]] = -1
-    end
     tilt_config = Array.new(4) { RND.next_int & 3 }
     (@n // 4).upto(@n * 3 // 4) do |i|
       (@n // 4).upto(@n * 3 // 4) do |j|
@@ -347,7 +353,7 @@ class Solver
 
     rects = [] of Rect
     if !prev_result.rects.empty?
-      # 前回の結果からいくつかの四角とその依存元を保持する
+      # 前回の結果からいくつかの四角とその依存先を削除する
       STOPWATCH.start("retain")
       if (RND.next_int & 0x1F) == 0
         rm_pos = prev_result.rects[RND.next_int(prev_result.rects.size)].p0
@@ -359,35 +365,36 @@ class Solver
           if rm_b <= rect.y && rect.y <= rm_t && rm_l <= rect.x && rect.x <= rm_r
             next
           end
-          if rect.any? { |p| @has_point[p.y][p.x] == EMPTY }
+          if rect.any? { |p| @has_point[p.y].bit(p.x) == 0 }
             next
           end
-          add(rect, rects.size)
+          add(rect)
           rects << rect
           score += w(rect.p0)
         end
       else
+        # 前回の結果からいくつかの四角とその依存元を保持する
         prob_retain = RND.next_int(3) + 1
         prev_result.rects.size.times do |i|
           if (RND.next_int & 15) <= prob_retain
             rect = prev_result.rects[i]
-            @has_point[rect.y][rect.x] = -1
+            @has_point[rect.y] |= 1u64 << rect.x
           end
         end
         prev_result.rects.reverse_each do |rect|
-          if @has_point[rect.y][rect.x] != EMPTY
+          if @has_point[rect.y].bit(rect.x) != 0
             rects << rect
             score += w(rect.p0)
             rect.each do |p|
-              @has_point[p.y][p.x] = -1
+              @has_point[p.y] |= 1u64 << p.x
             end
           end
         end
         rects.reverse!
-        rects.size.times { |i| add(rects[i], i) }
+        rects.size.times { |i| add(rects[i]) }
       end
       STOPWATCH.stop("retain")
-      # debug("retain:#{rects.size} out of #{prev_result.rects.size}")
+      debug("retain:#{rects.size} out of #{prev_result.rects.size}")
     end
     shuffle(@ps)
     si = 0
@@ -401,7 +408,7 @@ class Solver
         si += 1
       end
       break if !found_rect
-      add(found_rect, rects.size)
+      add(found_rect)
       rects << found_rect
       score += w(found_rect.p0)
     end
@@ -485,19 +492,19 @@ class Solver
     assert(cy1 == cy2 + DR[dir0] * s0)
     assert(cx1 == cx2 + DC[dir0] * s0)
     return nil if !inside(cy2) || !inside(cx2)
-    return nil if @has_point[cy2][cx2] != EMPTY
+    return nil if @has_point[cy2].bit(cx2) != 0
     return nil if @has_edge[cy2][cx2].bit(dir0) != 0
     if (1...s0).any? do |i|
          y = cy2 + DR[dir0] * i
          x = cx2 + DC[dir0] * i
-         @has_point[y][x] != EMPTY
+         @has_point[y].bit(x) != 0
        end
       return nil
     end
     if (1...s1).any? do |i|
          y = by + DR[dir1] * i
          x = bx + DC[dir1] * i
-         @has_point[y][x] != EMPTY
+         @has_point[y].bit(x) != 0
        end
       return nil
     end
@@ -519,19 +526,19 @@ class Solver
     assert(cy1 == cy2 + DR[dir0] * s0)
     assert(cx1 == cx2 + DC[dir0] * s0)
     return nil if !inside(cy2) || !inside(cx2)
-    return nil if @has_point[cy2][cx2] != EMPTY
+    return nil if @has_point[cy2].bit(cx2) != 0
     return nil if @has_edge[cy2][cx2].bit(dir0) != 0
     if (1...s0).any? do |i|
          y = cy2 + DR[dir0] * i
          x = cx2 + DC[dir0] * i
-         @has_point[y][x] != EMPTY
+         @has_point[y].bit(x) != 0
        end
       return nil
     end
     if (1...s1).any? do |i|
          y = by + DR[dir1] * i
          x = bx + DC[dir1] * i
-         @has_point[y][x] != EMPTY
+         @has_point[y].bit(x) != 0
        end
       return nil
     end
@@ -553,19 +560,19 @@ class Solver
     assert(cy2 == cy1 + DR[dir0] * s0)
     assert(cx2 == cx1 + DC[dir0] * s0)
     return nil if !inside(cy2) || !inside(cx2)
-    return nil if @has_point[cy2][cx2] != EMPTY
+    return nil if @has_point[cy2].bit(cx2) != 0
     return nil if @has_edge[cy1][cx1].bit(dir0) != 0
     if (1...s0).any? do |i|
          y = cy1 + DR[dir0] * i
          x = cx1 + DC[dir0] * i
-         @has_point[y][x] != EMPTY
+         @has_point[y].bit(x) != 0
        end
       return nil
     end
     if (1...s1).any? do |i|
          y = cy0 + DR[dir1] * i
          x = cx0 + DC[dir1] * i
-         @has_point[y][x] != EMPTY
+         @has_point[y].bit(x) != 0
        end
       return nil
     end
@@ -573,26 +580,45 @@ class Solver
   end
 
   def dist_nearest(y, x, dir)
-    s = 1
-    while true
-      y += DR[dir]
-      x += DC[dir]
-      return -1 if !inside(y) || !inside(x)
-      if @has_point[y][x] != EMPTY
-        return s
-      end
-      s += 1
+    case dir
+    when 0
+      v = @has_point_bit[0][x] & ((1u64 << y) - 1)
+      return v == 0 ? -1 : y - (63 - v.leading_zeros_count.to_i)
+    when 1
+      v = @has_point_bit[1][@n - 1 - (y - x)] & ((1u64 << y) - 1)
+      return v == 0 ? -1 : y - (63 - v.leading_zeros_count.to_i)
+    when 2
+      v = @has_point_bit[2][y] & ((1u64 << x) - 1)
+      return v == 0 ? -1 : x - (63 - v.leading_zeros_count.to_i)
+    when 3
+      v = @has_point_bit[3][y + x] & ~((1u64 << (y + 1)) - 1)
+      return v == 0 ? -1 : v.trailing_zeros_count.to_i - y
+    when 4
+      v = @has_point_bit[0][x] & ~((1u64 << (y + 1)) - 1)
+      return v == 0 ? -1 : v.trailing_zeros_count.to_i - y
+    when 5
+      v = @has_point_bit[1][@n - 1 - (y - x)] & ~((1u64 << (y + 1)) - 1)
+      return v == 0 ? -1 : v.trailing_zeros_count.to_i - y
+    when 6
+      v = @has_point_bit[2][y] & ~((1u64 << (x + 1)) - 1)
+      return v == 0 ? -1 : v.trailing_zeros_count.to_i - x
+    when 7
+      v = @has_point_bit[3][y + x] & ((1u64 << y) - 1)
+      return v == 0 ? -1 : y - (63 - v.leading_zeros_count.to_i)
     end
+    return -1
   end
 
-  def add(rect, ridx)
+  def add(rect)
     y, x = rect.y, rect.x
     @ps << Pos.new(y, x)
-    @has_point[y][x] = ridx
+    @has_point_bit[0][x] |= 1u64 << y
+    @has_point_bit[2][y] |= 1u64 << x
+    @has_point_bit[1][@n - 1 - (y - x)] |= 1u64 << y
+    @has_point_bit[3][y + x] |= 1u64 << y
     dir = rect.dir
     s0, s1 = rect.size0, rect.size1
     4.times do
-      # TODO: bit演算でまとめて
       s0.times do
         @has_edge[y][x] |= 1 << dir
         y += DR[dir]
