@@ -287,8 +287,9 @@ class Solver
     cooler = INITIAL_COOLER
     begin_time = Time.utc.to_unix_ms
     total_time = timelimit - begin_time
+    last_update_turn = 0
     while true
-      if (turn & 0x1) == 0
+      if (turn & 0xF) == 0
         cur_time = Time.utc.to_unix_ms
         if cur_time >= timelimit
           debug("total_turn: #{turn}")
@@ -296,13 +297,21 @@ class Solver
         end
         ratio = (cur_time - begin_time) / total_time
         cooler = Math.exp(Math.log(INITIAL_COOLER) * (1.0 - ratio) + Math.log(FINAL_COOLER) * ratio)
+        if turn > last_update_turn + 5000
+          cur_res = best_res
+          last_update_turn = turn
+          debug("revert turn:#{turn}")
+        end
       end
       @ps = orig_ps.dup
       res = solve_one(cur_res)
       if accept(res.score - cur_res.score, cooler)
+        COUNTER.add(0)
         if res.score > best_res.score
-          debug("score:#{res.score} turn:#{turn}")
+          COUNTER.add(1)
+          debug("best_score:#{res.score} turn:#{turn}")
           best_res = res
+          last_update_turn = turn
         end
         cur_res = res
       end
@@ -374,7 +383,7 @@ class Solver
     initial_si.times do |i|
       by = @ps[i].y
       bx = @ps[i].x
-      dirs = @has_edge[by][bx] ^ 0xFF
+      dirs = ~(@has_edge[by][bx] | (@has_edge[by][bx] >> 2) | (@has_edge[by][bx] << 6)) & 0xFF
       while dirs != 0
         dir0 = dirs.trailing_zeros_count
         dirs &= dirs - 1
@@ -392,7 +401,7 @@ class Solver
     while pi < @ps.size
       by = @ps[pi].y
       bx = @ps[pi].x
-      dirs = @has_edge[by][bx] ^ 0xFF
+      dirs = ~(@has_edge[by][bx] | (@has_edge[by][bx] >> 2) | (@has_edge[by][bx] << 6)) & 0xFF
       while dirs != 0
         dir0 = dirs.trailing_zeros_count
         dirs &= dirs - 1
@@ -400,11 +409,22 @@ class Solver
         next if s0 == -1
         rect = find_rect_cw(by, bx, s0, dir0)
         if !rect
-          rect = find_rect_ccw(by, bx, s0, dir0)
-          if !rect
-            rect = find_rect_both(by, bx, s0, dir0)
-          end
+          rect = find_rect_both(by, bx, s0, dir0)
         end
+        if rect
+          add(rect)
+          rects << rect
+          score += w(rect.p0)
+          dirs &= ~@has_edge[by][bx]
+        end
+      end
+      dirs = ~(@has_edge[by][bx] | (@has_edge[by][bx] >> 6) | (@has_edge[by][bx] << 2)) & 0xFF
+      while dirs != 0
+        dir0 = dirs.trailing_zeros_count
+        dirs &= dirs - 1
+        s0 = dist_nearest(by, bx, dir0)
+        next if s0 == -1
+        rect = find_rect_ccw(by, bx, s0, dir0)
         if rect
           add(rect)
           rects << rect
@@ -464,29 +484,15 @@ class Solver
     return nil if @has_edge[cy0][cx0].bit(dir1) != 0
     s1 = dist_nearest(cy0, cx0, dir1)
     return nil if s1 == -1
-    cy1 = cy0 + DR[dir1] * s1
-    cx1 = cx0 + DC[dir1] * s1
+    s11 = dist_nearest(by, bx, dir1)
+    return nil if (0 < s11) && (s11 <= s1)
     cy2 = by + DR[dir1] * s1
     cx2 = bx + DC[dir1] * s1
-    assert(cy1 == cy2 + DR[dir0] * s0)
-    assert(cx1 == cx2 + DC[dir0] * s0)
+    assert(cy0 + DR[dir1] * s1 == cy2 + DR[dir0] * s0)
+    assert(cx0 + DC[dir1] * s1 == cx2 + DC[dir0] * s0)
     return nil if !inside(cy2) || !inside(cx2)
-    return nil if @has_point[cy2].bit(cx2) != 0
     return nil if @has_edge[cy2][cx2].bit(dir0) != 0
-    if (1...s0).any? do |i|
-         y = cy2 + DR[dir0] * i
-         x = cx2 + DC[dir0] * i
-         @has_point[y].bit(x) != 0
-       end
-      return nil
-    end
-    if (1...s1).any? do |i|
-         y = by + DR[dir1] * i
-         x = bx + DC[dir1] * i
-         @has_point[y].bit(x) != 0
-       end
-      return nil
-    end
+    return nil if dist_nearest(cy2, cx2, dir0) != s0
     return Rect.new(Pos.new(cy2, cx2), s1, s0, dir1 ^ 4)
   end
 
@@ -498,29 +504,15 @@ class Solver
     return nil if @has_edge[cy0][cx0].bit(dir1) != 0
     s1 = dist_nearest(cy0, cx0, dir1)
     return nil if s1 == -1
-    cy1 = cy0 + DR[dir1] * s1
-    cx1 = cx0 + DC[dir1] * s1
+    s11 = dist_nearest(by, bx, dir1)
+    return nil if (0 < s11) && (s11 <= s1)
     cy2 = by + DR[dir1] * s1
     cx2 = bx + DC[dir1] * s1
-    assert(cy1 == cy2 + DR[dir0] * s0)
-    assert(cx1 == cx2 + DC[dir0] * s0)
+    assert(cy0 + DR[dir1] * s1 == cy2 + DR[dir0] * s0)
+    assert(cx0 + DC[dir1] * s1 == cx2 + DC[dir0] * s0)
     return nil if !inside(cy2) || !inside(cx2)
-    return nil if @has_point[cy2].bit(cx2) != 0
     return nil if @has_edge[cy2][cx2].bit(dir0) != 0
-    if (1...s0).any? do |i|
-         y = cy2 + DR[dir0] * i
-         x = cx2 + DC[dir0] * i
-         @has_point[y].bit(x) != 0
-       end
-      return nil
-    end
-    if (1...s1).any? do |i|
-         y = by + DR[dir1] * i
-         x = bx + DC[dir1] * i
-         @has_point[y].bit(x) != 0
-       end
-      return nil
-    end
+    return nil if dist_nearest(cy2, cx2, dir0) != s0
     return Rect.new(Pos.new(cy2, cx2), s0, s1, dir0)
   end
 
@@ -532,6 +524,8 @@ class Solver
     return nil if @has_edge[by][bx].bit(dir1) != 0
     s1 = dist_nearest(by, bx, dir1)
     return nil if s1 == -1
+    s11 = dist_nearest(cy0, cx0, dir1)
+    return nil if (0 < s11) && (s11 <= s1)
     cy1 = by + DR[dir1] * s1
     cx1 = bx + DC[dir1] * s1
     cy2 = cy0 + DR[dir1] * s1
@@ -539,22 +533,8 @@ class Solver
     assert(cy2 == cy1 + DR[dir0] * s0)
     assert(cx2 == cx1 + DC[dir0] * s0)
     return nil if !inside(cy2) || !inside(cx2)
-    return nil if @has_point[cy2].bit(cx2) != 0
     return nil if @has_edge[cy1][cx1].bit(dir0) != 0
-    if (1...s0).any? do |i|
-         y = cy1 + DR[dir0] * i
-         x = cx1 + DC[dir0] * i
-         @has_point[y].bit(x) != 0
-       end
-      return nil
-    end
-    if (1...s1).any? do |i|
-         y = cy0 + DR[dir1] * i
-         x = cx0 + DC[dir1] * i
-         @has_point[y].bit(x) != 0
-       end
-      return nil
-    end
+    return nil if dist_nearest(cy2, cx2, dir0 ^ 4) != s0
     return Rect.new(Pos.new(cy2, cx2), s0, s1, dir0 ^ 4)
   end
 
@@ -621,6 +601,7 @@ def main
   end
   puts best_res
   debug(STOPWATCH)
+  debug(COUNTER)
   debug(best_res.rects.size / solver.n / solver.n)
   debug((best_res.score / solver.s * solver.n * solver.n / solver.m * 1_000_000).round.to_i)
 end
