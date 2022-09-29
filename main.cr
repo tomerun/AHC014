@@ -229,7 +229,6 @@ class Solver
         @s += w(i, j)
       end
     end
-    @prior_tilt = Array(Array(Int32)).new(@n) { Array.new(@n, 0) }
     debug("n:#{@n} m:#{@m} s:#{@s}")
   end
 
@@ -327,28 +326,6 @@ class Solver
     end
     @has_edge.each { |row| row.fill(0) }
     score = @base_score
-    tilt_config = Array.new(4) { RND.next_int & 3 }
-    (@n // 4).upto(@n * 3 // 4) do |i|
-      (@n // 4).upto(@n * 3 // 4) do |j|
-        if i < j
-          if @n - 1 - i < j
-            @prior_tilt[i][j] = 0x22 << ((i + (tilt_config[0] & 1)) % 2 * 2)
-            @prior_tilt[i][j] |= 0x11 << ((i + j + (tilt_config[0] >> 1)) % 2 * 2)
-          else
-            @prior_tilt[i][j] = 0x22 << ((j + (tilt_config[1] & 1)) % 2 * 2)
-            @prior_tilt[i][j] |= 0x11 << ((i + j + (tilt_config[1] >> 1)) % 2 * 2)
-          end
-        else
-          if @n - 1 - i < j
-            @prior_tilt[i][j] = 0x22 << ((j + (tilt_config[2] & 1)) % 2 * 2)
-            @prior_tilt[i][j] |= 0x11 << ((i + j + (tilt_config[2] >> 1)) % 2 * 2)
-          else
-            @prior_tilt[i][j] = 0x22 << ((i + (tilt_config[3] & 1)) % 2 * 2)
-            @prior_tilt[i][j] |= 0x11 << ((i + j + (tilt_config[3] >> 1)) % 2 * 2)
-          end
-        end
-      end
-    end
     STOPWATCH.stop("init")
 
     rects = [] of Rect
@@ -375,107 +352,109 @@ class Solver
       else
         # 前回の結果からいくつかの四角とその依存元を保持する
         prob_retain = RND.next_int(3) + 1
-        prev_result.rects.size.times do |i|
-          if (RND.next_int & 15) <= prob_retain
-            rect = prev_result.rects[i]
-            @has_point[rect.y] |= 1u64 << rect.x
-          end
-        end
         prev_result.rects.reverse_each do |rect|
-          if @has_point[rect.y].bit(rect.x) != 0
+          if @has_point[rect.y].bit(rect.x) != 0 || (RND.next_int & 15) <= prob_retain
+            add(rect)
             rects << rect
             score += w(rect.p0)
+            @has_point[rect.y] |= 1u64 << rect.x
             rect.each do |p|
               @has_point[p.y] |= 1u64 << p.x
             end
           end
         end
         rects.reverse!
-        rects.size.times { |i| add(rects[i]) }
       end
       STOPWATCH.stop("retain")
-      debug("retain:#{rects.size} out of #{prev_result.rects.size}")
+      # debug("retain:#{rects.size} out of #{prev_result.rects.size}")
     end
     shuffle(@ps)
-    si = 0
-    initial_si = @ps.size
     STOPWATCH.start("find")
-    while true
-      found_rect = nil
-      si.upto(@ps.size - 1) do |i|
-        found_rect = find_rect(@ps[i].y, @ps[i].x, i < initial_si)
-        break if found_rect
-        si += 1
+    initial_si = @ps.size
+    initial_si.times do |i|
+      by = @ps[i].y
+      bx = @ps[i].x
+      dirs = @has_edge[by][bx] ^ 0xFF
+      while dirs != 0
+        dir0 = dirs.trailing_zeros_count
+        dirs &= dirs - 1
+        s0 = dist_nearest(by, bx, dir0)
+        next if s0 == -1
+        rect = find_rect_cw(by, bx, s0, dir0)
+        next if !rect
+        add(rect)
+        rects << rect
+        score += w(rect.p0)
+        dirs &= ~@has_edge[by][bx]
       end
-      break if !found_rect
-      add(found_rect)
-      rects << found_rect
-      score += w(found_rect.p0)
+    end
+    pi = initial_si
+    while pi < @ps.size
+      by = @ps[pi].y
+      bx = @ps[pi].x
+      dirs = @has_edge[by][bx] ^ 0xFF
+      while dirs != 0
+        dir0 = dirs.trailing_zeros_count
+        dirs &= dirs - 1
+        s0 = dist_nearest(by, bx, dir0)
+        next if s0 == -1
+        rect = find_rect_cw(by, bx, s0, dir0)
+        if !rect
+          rect = find_rect_ccw(by, bx, s0, dir0)
+          if !rect
+            rect = find_rect_both(by, bx, s0, dir0)
+          end
+        end
+        if rect
+          add(rect)
+          rects << rect
+          score += w(rect.p0)
+          dirs &= ~@has_edge[by][bx]
+        end
+      end
+      pi += 1
     end
     STOPWATCH.stop("find")
     return Result.new(rects, score)
   end
 
-  def find_rect(by, bx, initial)
-    best_rect = nil
-    best_val = INF
-    if !initial
-      dirs = @has_edge[by][bx] ^ 0xFF
-      while dirs != 0
-        dir0 = dirs.trailing_zeros_count
-        dirs &= dirs - 1
-        s0 = dist_nearest(by, bx, dir0)
-        next if s0 == -1
-        # clockwise
-        rect = find_rect_cw(by, bx, s0, dir0)
-        if rect
-          val = rect.size0 + rect.size1 + ((@prior_tilt[rect.y][rect.x] >> rect.dir) & 1)
-          if val < best_val
-            best_rect = rect
-            best_val = val
-          end
-        end
+  # def find_rect(by, bx, initial)
+  #   dirs = @has_edge[by][bx] ^ 0xFF
+  #   if !initial
+  #     while dirs != 0
+  #       dir0 = dirs.trailing_zeros_count
+  #       dirs &= dirs - 1
+  #       s0 = dist_nearest(by, bx, dir0)
+  #       next if s0 == -1
+  #       rect = find_rect_cw(by, bx, s0, dir0)
+  #       if rect
+  #         return rect
+  #       end
 
-        # counter-clockwise
-        rect = find_rect_ccw(by, bx, s0, dir0)
-        if rect
-          val = rect.size0 + rect.size1 + ((@prior_tilt[rect.y][rect.x] >> rect.dir) & 1)
-          if val < best_val
-            best_rect = rect
-            best_val = val
-          end
-        end
+  #       rect = find_rect_ccw(by, bx, s0, dir0)
+  #       if rect
+  #         return rect
+  #       end
 
-        # both sides
-        rect = find_rect_both(by, bx, s0, dir0)
-        if rect
-          val = rect.size0 + rect.size1 + ((@prior_tilt[rect.y][rect.x] >> rect.dir) & 1)
-          if val < best_val
-            best_rect = rect
-            best_val = val
-          end
-        end
-      end
-    else
-      dirs = @has_edge[by][bx] ^ 0xFF
-      while dirs != 0
-        dir0 = dirs.trailing_zeros_count
-        dirs &= dirs - 1
-        s0 = dist_nearest(by, bx, dir0)
-        next if s0 == -1
-        # clockwise
-        rect = find_rect_cw(by, bx, s0, dir0)
-        if rect
-          val = rect.size0 + rect.size1 + ((@prior_tilt[rect.y][rect.x] >> rect.dir) & 1)
-          if val < best_val
-            best_rect = rect
-            best_val = val
-          end
-        end
-      end
-    end
-    return best_rect
-  end
+  #       rect = find_rect_both(by, bx, s0, dir0)
+  #       if rect
+  #         return rect
+  #       end
+  #     end
+  #   else
+  #     while dirs != 0
+  #       dir0 = dirs.trailing_zeros_count
+  #       dirs &= dirs - 1
+  #       s0 = dist_nearest(by, bx, dir0)
+  #       next if s0 == -1
+  #       rect = find_rect_cw(by, bx, s0, dir0)
+  #       if rect
+  #         return rect
+  #       end
+  #     end
+  #   end
+  #   return nil
+  # end
 
   def find_rect_cw(by, bx, s0, dir0)
     dir1 = next_dir(dir0)
