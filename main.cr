@@ -1,13 +1,15 @@
-START_TIME = Time.utc.to_unix_ms
-TL         = (ENV["TL"]? || 900).to_i
-PART       = (ENV["PART"]? || 1).to_i
-INF        = 1 << 28
-EMPTY      = INF - 1
-COUNTER    = Counter.new
-STOPWATCH  = StopWatch.new
-RND        = XorShift.new(2u64)
-DR         = [-1, -1, 0, 1, 1, 1, 0, -1]
-DC         = [0, -1, -1, -1, 0, 1, 1, 1]
+START_TIME     = Time.utc.to_unix_ms
+TL             = (ENV["TL"]? || 900).to_i
+PART           = (ENV["PART"]? || 1).to_i
+INITIAL_COOLER = (ENV["IC"]? || 3).to_f * 0.0001
+FINAL_COOLER   = (ENV["FC"]? || 100).to_f * 0.0001
+INF            = 1 << 28
+EMPTY          = INF - 1
+COUNTER        = Counter.new
+STOPWATCH      = StopWatch.new
+RND            = XorShift.new(2u64)
+DR             = [-1, -1, 0, 1, 1, 1, 0, -1]
+DC             = [0, -1, -1, -1, 0, 1, 1, 1]
 
 class XorShift
   TO_DOUBLE = 0.5 / (1u64 << 63)
@@ -200,9 +202,17 @@ class Solver
     @sys = Array(Int32).new(@m, 0)
     @ps = [] of Pos
     @base_score = 0
+    @bbox_b = @n
+    @bbox_t = 0
+    @bbox_l = @n
+    @bbox_r = 0
     @m.times do |i|
       @sxs[i], @sys[i] = read_line.split.map(&.to_i)
       @base_score += w(@sys[i], @sxs[i])
+      @bbox_b = {@bbox_b, @sys[i]}.min
+      @bbox_t = {@bbox_t, @sys[i]}.max
+      @bbox_l = {@bbox_l, @sxs[i]}.min
+      @bbox_r = {@bbox_r, @sxs[i]}.max
     end
     @has_point = Array(Array(Int32)).new(@n) { Array.new(@n, EMPTY) }
     @has_edge = Array(Array(Int32)).new(@n) { Array.new(@n, 0) }
@@ -268,9 +278,7 @@ class Solver
     best_res = solve_one(RES_EMPTY)
     cur_res = best_res
     turn = 0
-    initial_cooler = 0.0003
-    final_cooler = 0.01
-    cooler = initial_cooler
+    cooler = INITIAL_COOLER
     begin_time = Time.utc.to_unix_ms
     total_time = timelimit - begin_time
     while true
@@ -281,7 +289,7 @@ class Solver
           break
         end
         ratio = (cur_time - begin_time) / total_time
-        cooler = Math.exp(Math.log(initial_cooler) * (1.0 - ratio) + Math.log(final_cooler) * ratio)
+        cooler = Math.exp(Math.log(INITIAL_COOLER) * (1.0 - ratio) + Math.log(FINAL_COOLER) * ratio)
       end
       @ps = orig_ps.dup
       res = solve_one(cur_res)
