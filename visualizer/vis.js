@@ -5,7 +5,9 @@ const update = document.getElementById("update")
 const recolor = document.getElementById("recolor")
 const show_order = document.getElementById("show_order")
 const frame = document.getElementById("frame")
+const frame_size = document.getElementById("frame_size")
 const step = document.getElementById("step")
+const step_size = document.getElementById("step_size")
 const zoom = document.getElementById("zoom")
 const canvas = document.getElementById("canvas")
 const real_score = document.getElementById("score")
@@ -94,6 +96,7 @@ class Visualizer {
 		frame.value = 0
 		step.max = this.frames[0].rects.length
 		step.value = step.max
+		frame_size.innerText = this.frames.length
 		this.show()
 	}
 
@@ -108,7 +111,8 @@ class Visualizer {
 		const n = this.input.n
 		const margin = 10
 		const cell_size = (canvas.width - margin * 2) / (n - 1)
-		console.log(`cell_size:${cell_size}`)
+		const f = this.frames[frame_i]
+		step_size.innerText = f.rects.length
 		ctx.clearRect(0, 0, canvas.width, canvas.height)
 		ctx.font = `${12 / zoom_r}px monospace`
 		ctx.textAlign = "center"
@@ -133,7 +137,6 @@ class Visualizer {
 		ctx.setLineDash([])
 
 		let score = this.input.base_score
-		const f = this.frames[frame_i]
 		ctx.lineWidth = 2 / zoom_r
 		const shift = 3 / zoom_r
 		f.rects.slice(0, step_i).forEach((rect, i) => {
