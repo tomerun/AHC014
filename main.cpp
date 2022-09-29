@@ -39,7 +39,7 @@ namespace {
 #ifdef LOCAL
 constexpr ll TL = 900;
 #else
-constexpr ll TL = 2800;
+constexpr ll TL = 900;
 #endif
 
 inline ll get_time() {
@@ -182,7 +182,6 @@ Counter counter;
 
 //////// end of template ////////
 
-constexpr int INF = 1 << 28;
 constexpr array<int, 8> DR = {-1, -1, 0, 1, 1, 1, 0, -1};
 constexpr array<int, 8> DC = {0, -1, -1, -1, 0, 1, 1, 1};
 constexpr double INITIAL_COOLER = 0.0003;
@@ -217,9 +216,6 @@ inline bool inside(int p) {
 
 struct Pos {
   int y, x;
-
-  // Pos(int y_, int x_) : y(y_), x(x_) {}
-  // Pos(const Pos& pos) : y(pos.y), x(pos.x) {}
 };
 
 struct Rect {

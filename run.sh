@@ -7,7 +7,7 @@ SEED_END=$(expr $IDX \* $RANGE + $RANGE + 1000)
 aws s3 cp s3://marathon-tester/AHC014/in.zip in.zip
 unzip in.zip
 
-crystal build --release -Dlocal main.cr
+g++ -Wall -Wextra -Wshadow -Wno-sign-compare -std=gnu++17 -O2 -DLOCAL -o main main.cpp
 for (( i = $SEED_START; i < $SEED_END; i++ )); do
 	seed=$(printf "%04d" $i)
 	echo "seed:$seed"
