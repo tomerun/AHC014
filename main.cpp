@@ -285,6 +285,30 @@ void verify(const vector<Rect>& rects) {
   }
 }
 
+void output_ans(const vector<Rect>& rects) {
+  printf("%d\n", (int)rects.size());
+  for (const Rect& rect : rects) {
+    int dy = DR[rect.dir];
+    int dx = DC[rect.dir];
+    int y = rect.y();
+    int x = rect.x();
+    printf("%d %d ", x, y);
+    y += dy * rect.size0;
+    x += dx * rect.size0;
+    swap(dy, dx);
+    dy *= -1;
+    printf("%d %d ", x, y);
+    y += dy * rect.size1;
+    x += dx * rect.size1;
+    swap(dy, dx);
+    dy *= -1;
+    printf("%d %d ", x, y);
+    y += dy * rect.size0;
+    x += dx * rect.size0;
+    printf("%d %d\n", x, y);
+  }
+}
+
 // maximize
 bool accept(int diff, double cooler) {
   if (diff >= 0) return true;
@@ -628,27 +652,7 @@ int main() {
 
   auto solver = unique_ptr<Solver>(new Solver());
   Result res = solver->solve(start_time + TL);
-  printf("%d\n", (int)res.rects.size());
-  for (const Rect& rect : res.rects) {
-    int dy = DR[rect.dir];
-    int dx = DC[rect.dir];
-    int y = rect.y();
-    int x = rect.x();
-    printf("%d %d ", x, y);
-    y += dy * rect.size0;
-    x += dx * rect.size0;
-    swap(dy, dx);
-    dy *= -1;
-    printf("%d %d ", x, y);
-    y += dy * rect.size1;
-    x += dx * rect.size1;
-    swap(dy, dx);
-    dy *= -1;
-    printf("%d %d ", x, y);
-    y += dy * rect.size0;
-    x += dx * rect.size0;
-    printf("%d %d\n", x, y);
-  }
+  output_ans(res.rects);
   fflush(stdout);
   PRINT_TIMER();
   debug("ratio:%.3f\n", 1.0 * res.rects.size() / (N * N));
