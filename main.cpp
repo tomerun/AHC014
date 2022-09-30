@@ -321,6 +321,7 @@ struct Solver {
   int base_score;
   int bbox_b, bbox_t, bbox_l, bbox_r;
   vector<Pos> ps;
+  int rm_size;
 
   Solver() {
     base_score = 0;
@@ -339,6 +340,7 @@ struct Solver {
       initial_has_point_bit[1][N - 1 - (YS[i] - XS[i])] |= 1ull << YS[i];
       initial_has_point_bit[3][YS[i] + XS[i]] |= 1ull << YS[i];
     }
+    rm_size = N / 8;
   }
 
   Result solve(int64_t timelimit) {
@@ -364,6 +366,7 @@ struct Solver {
         }
         const double ratio = 1.0 * (cur_time - begin_time) / total_time;
         cooler = exp(log(INITIAL_COOLER) * (1.0 - ratio) + log(FINAL_COOLER) * ratio);
+        rm_size = (int)(N / 6 * (1.0 - ratio) + 1 * ratio + 0.5);
         if (turn > last_update_turn + 5000) {
           cur_res = best_res;
           last_update_turn = turn;
@@ -373,7 +376,9 @@ struct Solver {
       ps = orig_ps;
       Result res = solve_one(cur_res);
       if (accept(res.score - cur_res.score, cooler)) {
+        ADD_COUNTER(0);
         if (res.score > best_res.score) {
+          ADD_COUNTER(1);
           debug("best_score:%d turn:%d\n", res.score, turn);
           best_res = res;
           last_update_turn = turn;
@@ -400,8 +405,7 @@ struct Solver {
     }
     int score = base_score;
     STOP_TIMER(0);
-    static vector<Rect> rects;
-    rects.clear();
+    vector<Rect> rects;
     if (!prev_result.rects.empty()) {
       START_TIMER(1);
       if ((rnd.nextUInt() & 0x1F) == 0) {
@@ -428,7 +432,7 @@ struct Solver {
           score += w(rect.y(), rect.x());
         }
       } else {
-        const int prob_keep = rnd.nextUInt(3) + 1;
+        const int prob_keep = rnd.nextUInt(3) + 2;
         for (auto itr = prev_result.rects.rbegin(); itr != prev_result.rects.rend(); ++itr) {
           const Rect& rect = *itr;
           if ((has_point[rect.y()] & (1ull << rect.x())) || (rnd.nextUInt() & 0xF) <= prob_keep) {
@@ -458,7 +462,7 @@ struct Solver {
       const int bx = ps[i].x;
       int dirs = ~(has_edge[by][bx] | (has_edge[by][bx] >> 2) | (has_edge[by][bx] << 6)) & 0xFF;
       while (dirs != 0) {
-        int dir0 = __builtin_ctzll(dirs);
+        int dir0 = __builtin_ctz(dirs);
         dirs &= dirs - 1;
         int s0 = dist_nearest(by, bx, dir0);
         if (s0 == -1) continue;
@@ -508,6 +512,7 @@ struct Solver {
       pi += 1;
     }
     STOP_TIMER(2);
+    // verify(rects);
     return Result(rects, score);
   }
 
@@ -655,6 +660,7 @@ int main() {
   output_ans(res.rects);
   fflush(stdout);
   PRINT_TIMER();
+  PRINT_COUNTER();
   debug("ratio:%.3f\n", 1.0 * res.rects.size() / (N * N));
   debug("%d\n", (int)(1e6 * res.score / S * N * N / M + 0.5));
 }
