@@ -321,7 +321,6 @@ struct Solver {
   int base_score;
   int bbox_b, bbox_t, bbox_l, bbox_r;
   vector<Pos> ps;
-  int rm_size;
 
   Solver() {
     base_score = 0;
@@ -340,7 +339,6 @@ struct Solver {
       initial_has_point_bit[1][N - 1 - (YS[i] - XS[i])] |= 1ull << YS[i];
       initial_has_point_bit[3][YS[i] + XS[i]] |= 1ull << YS[i];
     }
-    rm_size = N / 8;
   }
 
   Result solve(int64_t timelimit) {
@@ -366,7 +364,6 @@ struct Solver {
         }
         const double ratio = 1.0 * (cur_time - begin_time) / total_time;
         cooler = exp(log(INITIAL_COOLER) * (1.0 - ratio) + log(FINAL_COOLER) * ratio);
-        rm_size = (int)(N / 6 * (1.0 - ratio) + 1 * ratio + 0.5);
         if (turn > last_update_turn + 5000) {
           cur_res = best_res;
           last_update_turn = turn;
@@ -408,50 +405,25 @@ struct Solver {
     vector<Rect> rects;
     if (!prev_result.rects.empty()) {
       START_TIMER(1);
-      if ((rnd.nextUInt() & 0x1F) == 0) {
-        Pos rm_pos = prev_result.rects[rnd.nextUInt(prev_result.rects.size())].p0;
-        const int rm_b = rm_pos.y - rnd.nextUInt(5);
-        const int rm_t = rm_pos.y + rnd.nextUInt(5);
-        const int rm_l = rm_pos.x - rnd.nextUInt(5);
-        const int rm_r = rm_pos.x + rnd.nextUInt(5);
-        for (const Rect& rect : prev_result.rects) {
-          if (rm_b <= rect.y() && rect.y() <= rm_t && rm_l <= rect.x() && rect.x() <= rm_r) {
-            continue;
-          }
-          int y = rect.y() + DR[rect.dir] * rect.size0;
-          int x = rect.x() + DC[rect.dir] * rect.size0;
-          if ((has_point[y] & (1ull << x)) == 0) continue;
-          y += -DC[rect.dir] * rect.size1;
-          x += DR[rect.dir] * rect.size1;
-          if ((has_point[y] & (1ull << x)) == 0) continue;
-          y += -DR[rect.dir] * rect.size0;
-          x += -DC[rect.dir] * rect.size0;
-          if ((has_point[y] & (1ull << x)) == 0) continue;
+      const int prob_keep = rnd.nextUInt(3) + 2;
+      for (auto itr = prev_result.rects.rbegin(); itr != prev_result.rects.rend(); ++itr) {
+        const Rect& rect = *itr;
+        if ((has_point[rect.y()] & (1ull << rect.x())) || (rnd.nextUInt() & 0xF) <= prob_keep) {
           add(rect);
           rects.push_back(rect);
           score += w(rect.y(), rect.x());
+          int y = rect.y() + DR[rect.dir] * rect.size0;
+          int x = rect.x() + DC[rect.dir] * rect.size0;
+          has_point[y] |= (1ull << x);
+          y += -DC[rect.dir] * rect.size1;
+          x += DR[rect.dir] * rect.size1;
+          has_point[y] |= (1ull << x);
+          y += -DR[rect.dir] * rect.size0;
+          x += -DC[rect.dir] * rect.size0;
+          has_point[y] |= (1ull << x);
         }
-      } else {
-        const int prob_keep = rnd.nextUInt(3) + 2;
-        for (auto itr = prev_result.rects.rbegin(); itr != prev_result.rects.rend(); ++itr) {
-          const Rect& rect = *itr;
-          if ((has_point[rect.y()] & (1ull << rect.x())) || (rnd.nextUInt() & 0xF) <= prob_keep) {
-            add(rect);
-            rects.push_back(rect);
-            score += w(rect.y(), rect.x());
-            int y = rect.y() + DR[rect.dir] * rect.size0;
-            int x = rect.x() + DC[rect.dir] * rect.size0;
-            has_point[y] |= (1ull << x);
-            y += -DC[rect.dir] * rect.size1;
-            x += DR[rect.dir] * rect.size1;
-            has_point[y] |= (1ull << x);
-            y += -DR[rect.dir] * rect.size0;
-            x += -DC[rect.dir] * rect.size0;
-            has_point[y] |= (1ull << x);
-          }
-        }
-        reverse(rects.begin(), rects.end());
       }
+      reverse(rects.begin(), rects.end());
       STOP_TIMER(1);
     }
     shuffle(ps);
