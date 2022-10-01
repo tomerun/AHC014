@@ -351,6 +351,8 @@ struct Solver {
     Result best_res = solve_one(Result(vector<Rect>(), 0));
     Result cur_res = best_res;
     int turn = 0;
+    const int INITIAL_PS_ADD = 3;
+    int ps_add = INITIAL_PS_ADD;
     double cooler = INITIAL_COOLER;
     const auto begin_time = get_time();
     const auto total_time = timelimit - begin_time;
@@ -364,6 +366,9 @@ struct Solver {
         }
         const double ratio = 1.0 * (cur_time - begin_time) / total_time;
         cooler = exp(log(INITIAL_COOLER) * (1.0 - ratio) + log(FINAL_COOLER) * ratio);
+        cur_res.score -= cur_res.rects.size() * ps_add;
+        ps_add = (int)(INITIAL_PS_ADD * (1.0 - ratio));
+        cur_res.score += cur_res.rects.size() * ps_add;
         if (turn > last_update_turn + 5000) {
           cur_res = best_res;
           last_update_turn = turn;
@@ -372,12 +377,13 @@ struct Solver {
       }
       ps = orig_ps;
       Result res = solve_one(cur_res);
+      res.score += res.rects.size() * ps_add;
       if (accept(res.score - cur_res.score, cooler)) {
         ADD_COUNTER(0);
-        if (res.score > best_res.score) {
+        if (res.score - res.rects.size() * ps_add > best_res.score) {
           ADD_COUNTER(1);
-          debug("best_score:%d turn:%d\n", res.score, turn);
-          best_res = res;
+          debug("best_score:%ld turn:%d\n", res.score - res.rects.size() * ps_add, turn);
+          best_res = Result(res.rects, res.score - res.rects.size() * ps_add);
           last_update_turn = turn;
         }
         swap(cur_res.rects, res.rects);
