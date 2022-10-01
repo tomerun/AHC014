@@ -183,8 +183,7 @@ Counter counter;
 
 constexpr array<int, 8> DR = {-1, -1, 0, 1, 1, 1, 0, -1};
 constexpr array<int, 8> DC = {0, -1, -1, -1, 0, 1, 1, 1};
-constexpr double INITIAL_COOLER = 0.0003;
-constexpr double FINAL_COOLER = 0.0100;
+constexpr double FINAL_COOLER   = 0.0030;
 
 int N, M, S;
 vi XS, YS;
@@ -353,7 +352,9 @@ struct Solver {
     int turn = 0;
     const int INITIAL_PS_ADD = 3;
     int ps_add = INITIAL_PS_ADD;
+    const double INITIAL_COOLER = (2.0 * N * N / M - 18.0) * 0.00001;
     double cooler = INITIAL_COOLER;
+    debug("initial_cooler:%.5f\n", INITIAL_COOLER);
     const auto begin_time = get_time();
     const auto total_time = timelimit - begin_time;
     int last_update_turn = 0;
